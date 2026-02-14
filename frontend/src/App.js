@@ -11,6 +11,8 @@ import GetQuote from "@/pages/GetQuote";
 import ContractorAuth from "@/pages/ContractorAuth";
 import ContractorDashboard from "@/pages/ContractorDashboard";
 import PricingPage from "@/pages/PricingPage";
+import ContentGenerator from "@/pages/ContentGenerator";
+import CampaignManager from "@/pages/CampaignManager";
 
 function App() {
   return (
@@ -26,6 +28,8 @@ function App() {
             <Route path="/auth" element={<ContractorAuth />} />
             <Route path="/dashboard" element={<ContractorDashboard />} />
             <Route path="/pricing" element={<PricingPage />} />
+            <Route path="/content" element={<ContentGenerator />} />
+            <Route path="/campaigns" element={<CampaignManager />} />
           </Routes>
         </main>
         <Footer />
