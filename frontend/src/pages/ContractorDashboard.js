@@ -195,6 +195,14 @@ export default function ContractorDashboard() {
             <TabsTrigger data-testid="dashboard-profile-tab" value="profile" className="rounded-sm text-xs tracking-widest font-semibold uppercase">
               <User className="w-3 h-3 mr-2" /> PROFILE
             </TabsTrigger>
+            <TabsTrigger data-testid="dashboard-notifications-tab" value="notifications" className="rounded-sm text-xs tracking-widest font-semibold uppercase relative">
+              <Bell className="w-3 h-3 mr-2" /> NOTIFICATIONS
+              {notifications.filter(n => !n.read).length > 0 && (
+                <span className="ml-1 w-4 h-4 bg-primary text-primary-foreground text-[9px] font-bold rounded-full inline-flex items-center justify-center">
+                  {notifications.filter(n => !n.read).length}
+                </span>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="leads">
