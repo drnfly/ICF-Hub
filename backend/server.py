@@ -219,7 +219,27 @@ async def create_lead(data: LeadCreate):
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.leads.insert_one(doc)
-    return {k: v for k, v in doc.items() if k != "_id"}
+    safe_doc = {k: v for k, v in doc.items() if k != "_id"}
+
+    # Notify all contractors about new lead
+    contractors = await db.contractors.find({}, {"_id": 0, "id": 1, "email": 1}).to_list(500)
+    notifications = []
+    for c in contractors:
+        notifications.append({
+            "id": str(uuid.uuid4()),
+            "contractor_id": c["id"],
+            "type": "new_lead",
+            "title": f"New Lead: {data.name}",
+            "message": f"{data.name} from {data.city}, {data.state} is looking for {data.project_type.replace('_', ' ')} ({data.budget_range.replace('_', ' ')})",
+            "lead_id": lead_id,
+            "read": False,
+            "emailed": False,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+    if notifications:
+        await db.notifications.insert_many(notifications)
+
+    return safe_doc
 
 @api_router.get("/leads")
 async def get_leads(user=Depends(get_current_contractor)):
