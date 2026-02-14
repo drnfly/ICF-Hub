@@ -1,0 +1,134 @@
+import { useState, useEffect } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Menu, X, Zap } from "lucide-react";
+
+export default function Navbar() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const token = localStorage.getItem("icf_token");
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => { setIsOpen(false); }, [location]);
+
+  const navLinks = [
+    { to: "/about-icf", label: "WHY ICF" },
+    { to: "/contractors", label: "CONTRACTORS" },
+    { to: "/pricing", label: "PRICING" },
+    { to: "/get-quote", label: "GET QUOTE" },
+  ];
+
+  return (
+    <nav
+      data-testid="main-navbar"
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        scrolled ? "glass shadow-sm" : "bg-transparent"
+      }`}
+    >
+      <div className="max-w-7xl mx-auto px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          <Link to="/" data-testid="nav-logo" className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-primary rounded-sm flex items-center justify-center">
+              <Zap className="w-5 h-5 text-white" />
+            </div>
+            <span className="text-lg font-bold tracking-tight" style={{ fontFamily: "'Clash Display', sans-serif" }}>
+              ICF HUB
+            </span>
+          </Link>
+
+          <div className="hidden md:flex items-center gap-8">
+            {navLinks.map((link) => (
+              <Link
+                key={link.to}
+                to={link.to}
+                data-testid={`nav-${link.label.toLowerCase().replace(/\s/g, "-")}`}
+                className={`text-xs font-semibold tracking-widest transition-colors hover:text-primary ${
+                  location.pathname === link.to ? "text-primary" : "text-foreground/70"
+                }`}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+
+          <div className="hidden md:flex items-center gap-3">
+            {token ? (
+              <Button
+                data-testid="nav-dashboard-btn"
+                onClick={() => navigate("/dashboard")}
+                className="rounded-sm text-xs tracking-widest font-bold uppercase px-5 py-2 hard-shadow"
+              >
+                DASHBOARD
+              </Button>
+            ) : (
+              <>
+                <Button
+                  data-testid="nav-login-btn"
+                  variant="ghost"
+                  onClick={() => navigate("/auth")}
+                  className="text-xs tracking-widest font-semibold"
+                >
+                  SIGN IN
+                </Button>
+                <Button
+                  data-testid="nav-get-started-btn"
+                  onClick={() => navigate("/get-quote")}
+                  className="rounded-sm text-xs tracking-widest font-bold uppercase px-5 py-2 hard-shadow"
+                >
+                  GET A QUOTE
+                </Button>
+              </>
+            )}
+          </div>
+
+          <button
+            data-testid="nav-mobile-toggle"
+            onClick={() => setIsOpen(!isOpen)}
+            className="md:hidden p-2"
+          >
+            {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
+      </div>
+
+      {isOpen && (
+        <div data-testid="nav-mobile-menu" className="md:hidden glass border-t border-border">
+          <div className="px-6 py-4 space-y-3">
+            {navLinks.map((link) => (
+              <Link
+                key={link.to}
+                to={link.to}
+                className="block text-sm font-semibold tracking-wider py-2"
+              >
+                {link.label}
+              </Link>
+            ))}
+            <div className="pt-3 border-t border-border flex gap-3">
+              {token ? (
+                <Button onClick={() => navigate("/dashboard")} className="w-full rounded-sm text-xs tracking-widest font-bold uppercase">
+                  DASHBOARD
+                </Button>
+              ) : (
+                <>
+                  <Button variant="outline" onClick={() => navigate("/auth")} className="flex-1 rounded-sm text-xs tracking-widest">
+                    SIGN IN
+                  </Button>
+                  <Button onClick={() => navigate("/get-quote")} className="flex-1 rounded-sm text-xs tracking-widest">
+                    GET QUOTE
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </nav>
+  );
+}
