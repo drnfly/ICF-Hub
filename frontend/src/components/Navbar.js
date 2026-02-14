@@ -22,6 +22,14 @@ export default function Navbar() {
 
   useEffect(() => { setIsOpen(false); }, [location]);
 
+  useEffect(() => {
+    if (token) {
+      axios.get(`${API}/notifications/unread-count`, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(r => setUnread(r.data.count)).catch(() => {});
+    }
+  }, [token, location]);
+
   const navLinks = token ? [
     { to: "/dashboard", label: "DASHBOARD" },
     { to: "/content", label: "AI CONTENT" },
