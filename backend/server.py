@@ -582,6 +582,196 @@ Return ONLY valid JSON with: score, grade, urgency, estimated_value, insights, r
     lead["ai_score"] = score_data
     return lead
 
+# ─── Scheduling Endpoints ───
+
+@api_router.post("/schedule")
+async def create_scheduled_post(data: SchedulePostCreate, user=Depends(get_current_contractor)):
+    post_id = str(uuid.uuid4())
+    doc = {
+        "id": post_id,
+        "contractor_id": user["id"],
+        **data.model_dump(),
+        "status": "scheduled",
+        "published_at": None,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.scheduled_posts.insert_one(doc)
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+@api_router.get("/schedule")
+async def get_scheduled_posts(user=Depends(get_current_contractor)):
+    posts = await db.scheduled_posts.find(
+        {"contractor_id": user["id"]}, {"_id": 0}
+    ).sort("scheduled_date", 1).to_list(500)
+    return posts
+
+@api_router.put("/schedule/{post_id}")
+async def update_scheduled_post(post_id: str, data: SchedulePostUpdate, user=Depends(get_current_contractor)):
+    update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    result = await db.scheduled_posts.update_one(
+        {"id": post_id, "contractor_id": user["id"]}, {"$set": update_data}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Post not found")
+    updated = await db.scheduled_posts.find_one({"id": post_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/schedule/{post_id}")
+async def delete_scheduled_post(post_id: str, user=Depends(get_current_contractor)):
+    result = await db.scheduled_posts.delete_one({"id": post_id, "contractor_id": user["id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return {"message": "Deleted"}
+
+@api_router.post("/schedule/{post_id}/publish")
+async def publish_scheduled_post(post_id: str, user=Depends(get_current_contractor)):
+    post = await db.scheduled_posts.find_one({"id": post_id, "contractor_id": user["id"]}, {"_id": 0})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.scheduled_posts.update_one(
+        {"id": post_id},
+        {"$set": {"status": "published", "published_at": now}}
+    )
+    # Create notification
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "contractor_id": user["id"],
+        "type": "post_published",
+        "title": f"Post Published on {post['platform'].title()}",
+        "message": f"Your scheduled {post['platform']} post has been published successfully.",
+        "read": False,
+        "emailed": False,
+        "created_at": now
+    })
+    post["status"] = "published"
+    post["published_at"] = now
+    return post
+
+@api_router.post("/schedule/bulk")
+async def bulk_schedule_posts(posts: List[SchedulePostCreate], user=Depends(get_current_contractor)):
+    created = []
+    for post_data in posts:
+        post_id = str(uuid.uuid4())
+        doc = {
+            "id": post_id,
+            "contractor_id": user["id"],
+            **post_data.model_dump(),
+            "status": "scheduled",
+            "published_at": None,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.scheduled_posts.insert_one(doc)
+        created.append({k: v for k, v in doc.items() if k != "_id"})
+    return created
+
+# ─── Notifications Endpoints ───
+
+@api_router.get("/notifications")
+async def get_notifications(user=Depends(get_current_contractor)):
+    notifications = await db.notifications.find(
+        {"contractor_id": user["id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return notifications
+
+@api_router.get("/notifications/unread-count")
+async def get_unread_count(user=Depends(get_current_contractor)):
+    count = await db.notifications.count_documents({"contractor_id": user["id"], "read": False})
+    return {"count": count}
+
+@api_router.put("/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: str, user=Depends(get_current_contractor)):
+    await db.notifications.update_one(
+        {"id": notification_id, "contractor_id": user["id"]},
+        {"$set": {"read": True}}
+    )
+    return {"message": "Marked as read"}
+
+@api_router.put("/notifications/read-all")
+async def mark_all_read(user=Depends(get_current_contractor)):
+    await db.notifications.update_many(
+        {"contractor_id": user["id"], "read": False},
+        {"$set": {"read": True}}
+    )
+    return {"message": "All marked as read"}
+
+# ─── Analytics Endpoint ───
+
+@api_router.get("/analytics")
+async def get_analytics(user=Depends(get_current_contractor)):
+    # Leads by status
+    leads = await db.leads.find({}, {"_id": 0}).to_list(1000)
+    status_counts = {}
+    leads_by_date = {}
+    for lead in leads:
+        s = lead.get("status", "new")
+        status_counts[s] = status_counts.get(s, 0) + 1
+        date_key = lead.get("created_at", "")[:10]
+        if date_key:
+            leads_by_date[date_key] = leads_by_date.get(date_key, 0) + 1
+
+    # Content by platform
+    content = await db.generated_content.find(
+        {"contractor_id": user["id"]}, {"_id": 0, "platform": 1, "items": 1, "created_at": 1}
+    ).to_list(500)
+    content_by_platform = {}
+    total_posts = 0
+    for c in content:
+        p = c.get("platform", "unknown")
+        count = len(c.get("items", []))
+        content_by_platform[p] = content_by_platform.get(p, 0) + count
+        total_posts += count
+
+    # Campaigns
+    campaigns = await db.campaigns.find(
+        {"contractor_id": user["id"]}, {"_id": 0, "status": 1, "goal": 1, "platforms": 1}
+    ).to_list(100)
+    campaign_by_status = {}
+    for camp in campaigns:
+        s = camp.get("status", "draft")
+        campaign_by_status[s] = campaign_by_status.get(s, 0) + 1
+
+    # Scheduled posts
+    scheduled = await db.scheduled_posts.find(
+        {"contractor_id": user["id"]}, {"_id": 0, "status": 1, "platform": 1, "scheduled_date": 1}
+    ).to_list(500)
+    schedule_by_status = {}
+    schedule_by_platform = {}
+    for sp in scheduled:
+        s = sp.get("status", "scheduled")
+        schedule_by_status[s] = schedule_by_status.get(s, 0) + 1
+        p = sp.get("platform", "unknown")
+        schedule_by_platform[p] = schedule_by_platform.get(p, 0) + 1
+
+    # Notifications
+    unread = await db.notifications.count_documents({"contractor_id": user["id"], "read": False})
+
+    return {
+        "leads": {
+            "total": len(leads),
+            "by_status": status_counts,
+            "by_date": dict(sorted(leads_by_date.items())[-30:]),
+            "conversion_rate": round((status_counts.get("qualified", 0) / max(len(leads), 1)) * 100, 1)
+        },
+        "content": {
+            "total_batches": len(content),
+            "total_posts": total_posts,
+            "by_platform": content_by_platform
+        },
+        "campaigns": {
+            "total": len(campaigns),
+            "by_status": campaign_by_status
+        },
+        "schedule": {
+            "total": len(scheduled),
+            "by_status": schedule_by_status,
+            "by_platform": schedule_by_platform
+        },
+        "notifications_unread": unread
+    }
+
 # ─── Stats Endpoint ───
 
 @api_router.get("/stats")
