@@ -1,393 +1,325 @@
 #!/usr/bin/env python3
-
+"""
+Backend API Testing for ICF Hub New Features
+Testing: Auto-scheduling, Email notifications, Analytics dashboard, Content Calendar
+"""
 import requests
-import sys
 import json
-from datetime import datetime
+import sys
+from datetime import datetime, timedelta
+import time
 
 class ICFHubAPITester:
-    def __init__(self, base_url="https://construct-connect-20.preview.emergentagent.com"):
+    def __init__(self, base_url="https://construct-connect-20.preview.emergentagent.com/api"):
         self.base_url = base_url
-        self.api_url = f"{base_url}/api"
         self.token = None
-        self.contractor_id = None
         self.tests_run = 0
         self.tests_passed = 0
-        self.failed_tests = []
+        self.contractor_id = None
+        self.test_results = []
 
-    def run_test(self, name, method, endpoint, expected_status, data=None, headers=None):
-        """Run a single API test"""
-        url = f"{self.api_url}/{endpoint}"
-        default_headers = {'Content-Type': 'application/json'}
-        if headers:
-            default_headers.update(headers)
-        if self.token and 'Authorization' not in default_headers:
-            default_headers['Authorization'] = f'Bearer {self.token}'
-
+    def log_test(self, test_name, success, response_status=None, details=""):
+        """Log test results"""
         self.tests_run += 1
-        print(f"\n🔍 Testing {name}...")
-        print(f"   URL: {url}")
+        if success:
+            self.tests_passed += 1
+            status = "✅ PASS"
+        else:
+            status = "❌ FAIL"
         
-        try:
-            if method == 'GET':
-                response = requests.get(url, headers=default_headers, timeout=30)
-            elif method == 'POST':
-                response = requests.post(url, json=data, headers=default_headers, timeout=30)
-            elif method == 'PUT':
-                response = requests.put(url, json=data, headers=default_headers, timeout=30)
-
-            success = response.status_code == expected_status
-            if success:
-                self.tests_passed += 1
-                print(f"✅ Passed - Status: {response.status_code}")
-                if response.content:
-                    try:
-                        result = response.json()
-                        print(f"   Response keys: {list(result.keys()) if isinstance(result, dict) else 'Non-dict response'}")
-                        return True, result
-                    except:
-                        return True, response.text
-                return True, {}
-            else:
-                print(f"❌ Failed - Expected {expected_status}, got {response.status_code}")
-                print(f"   Response: {response.text[:200]}")
-                self.failed_tests.append({
-                    "test": name,
-                    "expected": expected_status,
-                    "actual": response.status_code,
-                    "response": response.text[:200]
-                })
-                return False, {}
-
-        except Exception as e:
-            print(f"❌ Failed - Error: {str(e)}")
-            self.failed_tests.append({
-                "test": name,
-                "error": str(e)
-            })
-            return False, {}
-
-    def test_health(self):
-        """Test health endpoint"""
-        return self.run_test("Health Check", "GET", "health", 200)
-
-    def test_stats(self):
-        """Test stats endpoint"""
-        return self.run_test("Get Stats", "GET", "stats", 200)
-
-    def test_contractor_register(self):
-        """Test contractor registration"""
-        timestamp = datetime.now().strftime("%H%M%S")
-        register_data = {
-            "company_name": f"Test ICF Co {timestamp}",
-            "email": f"test{timestamp}@icftest.com",
-            "password": "TestPass123!",
-            "phone": "(555) 123-4567",
-            "city": "Austin",
-            "state": "TX",
-            "description": "Professional ICF contractor specializing in residential construction.",
-            "years_experience": 10,
-            "specialties": ["Residential", "Commercial", "Foundations"]
-        }
+        result = f"{status} - {test_name}"
+        if response_status:
+            result += f" (Status: {response_status})"
+        if details:
+            result += f" - {details}"
         
-        success, response = self.run_test(
-            "Contractor Registration", 
-            "POST", 
-            "auth/register", 
-            200, 
-            register_data
-        )
-        
-        if success and 'token' in response:
-            self.token = response['token']
-            self.contractor_id = response.get('contractor', {}).get('id')
-            print(f"   Token received: {self.token[:20]}...")
-            return True
-        return False
-
-    def test_contractor_login(self):
-        """Test contractor login with existing credentials"""
-        # Use the same credentials from registration for login test
-        timestamp = datetime.now().strftime("%H%M%S")
-        login_data = {
-            "email": f"test{timestamp}@icftest.com",
-            "password": "TestPass123!"
-        }
-        
-        success, response = self.run_test(
-            "Contractor Login", 
-            "POST", 
-            "auth/login", 
-            200, 
-            login_data
-        )
+        print(result)
+        self.test_results.append({
+            "test_name": test_name,
+            "success": success,
+            "status_code": response_status,
+            "details": details
+        })
         return success
 
-    def test_get_contractors(self):
-        """Test get contractors list"""
-        return self.run_test("Get Contractors List", "GET", "contractors", 200)
+    def make_request(self, method, endpoint, data=None, expected_status=200):
+        """Make HTTP request with proper headers"""
+        url = f"{self.base_url}/{endpoint.lstrip('/')}"
+        headers = {'Content-Type': 'application/json'}
+        if self.token:
+            headers['Authorization'] = f'Bearer {self.token}'
 
-    def test_create_lead(self):
-        """Test creating a lead"""
-        timestamp = datetime.now().strftime("%H%M%S")
+        try:
+            if method == 'GET':
+                response = requests.get(url, headers=headers, timeout=30)
+            elif method == 'POST':
+                response = requests.post(url, json=data, headers=headers, timeout=30)
+            elif method == 'PUT':
+                response = requests.put(url, json=data, headers=headers, timeout=30)
+            elif method == 'DELETE':
+                response = requests.delete(url, headers=headers, timeout=30)
+            else:
+                raise ValueError(f"Unsupported method: {method}")
+            
+            success = response.status_code == expected_status
+            response_data = {}
+            try:
+                response_data = response.json()
+            except:
+                response_data = {"text": response.text}
+            
+            return success, response.status_code, response_data
+        except Exception as e:
+            return False, 0, {"error": str(e)}
+
+    def test_auth_setup(self):
+        """Register a test contractor for authentication"""
+        print("\n🔐 Setting up authentication...")
+        timestamp = int(time.time())
+        test_email = f"test_{timestamp}@example.com"
+        
+        success, status, response = self.make_request('POST', '/auth/register', {
+            "company_name": f"Test ICF Company {timestamp}",
+            "email": test_email,
+            "password": "TestPassword123!",
+            "phone": "555-0123",
+            "city": "Test City",
+            "state": "TS",
+            "description": "Test ICF contractor",
+            "years_experience": 10,
+            "specialties": ["residential", "commercial"]
+        }, 200)
+
+        if success and 'token' in response:
+            self.token = response['token']
+            self.contractor_id = response['contractor']['id']
+            return self.log_test("Contractor Registration", True, status, f"Token acquired for {test_email}")
+        else:
+            return self.log_test("Contractor Registration", False, status, f"Failed to get token: {response}")
+
+    def test_schedule_endpoints(self):
+        """Test all scheduling-related endpoints"""
+        print("\n📅 Testing Schedule Endpoints...")
+        
+        # Test 1: Create scheduled post
+        tomorrow = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+        post_data = {
+            "platform": "facebook",
+            "content": "Test ICF post about energy efficiency benefits",
+            "hashtags": ["#ICF", "#GreenBuilding", "#EnergyEfficient"],
+            "cta": "Contact us for your ICF project quote!",
+            "scheduled_date": tomorrow,
+            "scheduled_time": "10:00",
+            "content_type": "educational"
+        }
+        
+        success, status, response = self.make_request('POST', '/schedule', post_data, 201)
+        post_id = response.get('id') if success else None
+        self.log_test("POST /api/schedule - Create scheduled post", success, status)
+        
+        # Test 2: Get scheduled posts
+        success, status, response = self.make_request('GET', '/schedule')
+        posts_found = len(response) if isinstance(response, list) else 0
+        self.log_test("GET /api/schedule - Get scheduled posts", success, status, f"Found {posts_found} posts")
+        
+        # Test 3: Bulk create posts
+        bulk_posts = [
+            {
+                "platform": "instagram",
+                "content": "ICF construction provides superior insulation",
+                "hashtags": ["#ICF", "#Construction"],
+                "cta": "Learn more about ICF benefits",
+                "scheduled_date": tomorrow,
+                "scheduled_time": "12:00",
+                "content_type": "promotional"
+            },
+            {
+                "platform": "linkedin",
+                "content": "Professional ICF construction services",
+                "hashtags": ["#ICF", "#Professional"],
+                "cta": "Contact our ICF experts",
+                "scheduled_date": tomorrow,
+                "scheduled_time": "14:00",
+                "content_type": "promotional"
+            }
+        ]
+        success, status, response = self.make_request('POST', '/schedule/bulk', bulk_posts, 200)
+        bulk_count = len(response) if isinstance(response, list) else 0
+        self.log_test("POST /api/schedule/bulk - Bulk create posts", success, status, f"Created {bulk_count} posts")
+        
+        if post_id:
+            # Test 4: Publish scheduled post
+            success, status, response = self.make_request('POST', f'/schedule/{post_id}/publish', {}, 200)
+            self.log_test("POST /api/schedule/{id}/publish - Publish post", success, status)
+            
+            # Test 5: Delete scheduled post
+            success, status, response = self.make_request('DELETE', f'/schedule/{post_id}', expected_status=200)
+            self.log_test("DELETE /api/schedule/{id} - Delete post", success, status)
+
+    def test_notifications_endpoints(self):
+        """Test notification system"""
+        print("\n🔔 Testing Notifications Endpoints...")
+        
+        # Test 1: Get notifications
+        success, status, response = self.make_request('GET', '/notifications')
+        notif_count = len(response) if isinstance(response, list) else 0
+        self.log_test("GET /api/notifications - Get notifications", success, status, f"Found {notif_count} notifications")
+        
+        # Test 2: Get unread count
+        success, status, response = self.make_request('GET', '/notifications/unread-count')
+        unread_count = response.get('count', 0) if success else 0
+        self.log_test("GET /api/notifications/unread-count - Unread count", success, status, f"Unread: {unread_count}")
+        
+        # Test 3: Create a test lead to trigger notification (leads create notifications for contractors)
         lead_data = {
-            "name": f"John Doe {timestamp}",
-            "email": f"johndoe{timestamp}@example.com",
-            "phone": "(555) 987-6543",
-            "city": "Dallas",
-            "state": "TX",
+            "name": "Test Homeowner",
+            "email": "homeowner@test.com",
+            "phone": "555-9999",
+            "city": "Test City",
+            "state": "TS",
             "project_type": "new_home",
-            "project_size": "2500_4000",
-            "budget_range": "400k_700k",
-            "timeline": "3_6_months",
-            "description": "Looking to build a new ICF home with modern design and energy efficiency features."
+            "project_size": "2000_3000_sqft",
+            "budget_range": "200k_300k",
+            "timeline": "6_12_months",
+            "description": "Looking for ICF construction for new home with energy efficiency focus"
         }
+        success, status, response = self.make_request('POST', '/leads', lead_data, 200)
+        self.log_test("POST /api/leads - Create lead (triggers notifications)", success, status)
         
-        success, response = self.run_test(
-            "Create Lead", 
-            "POST", 
-            "leads", 
-            200, 
-            lead_data
-        )
+        # Wait a moment for notification to be created
+        time.sleep(2)
         
-        if success and 'id' in response:
-            self.lead_id = response['id']
-            return True
-        return False
+        # Test 4: Get notifications again to see if new notification was created
+        success, status, response = self.make_request('GET', '/notifications')
+        new_notif_count = len(response) if isinstance(response, list) else 0
+        self.log_test("GET /api/notifications - After lead creation", success, status, f"Now {new_notif_count} notifications")
+        
+        # Test 5: Mark notification as read (if we have notifications)
+        if isinstance(response, list) and len(response) > 0:
+            notif_id = response[0].get('id')
+            if notif_id:
+                success, status, resp = self.make_request('PUT', f'/notifications/{notif_id}/read', {})
+                self.log_test("PUT /api/notifications/{id}/read - Mark read", success, status)
+        
+        # Test 6: Mark all notifications as read
+        success, status, response = self.make_request('PUT', '/notifications/read-all', {})
+        self.log_test("PUT /api/notifications/read-all - Mark all read", success, status)
 
-    def test_get_leads(self):
-        """Test getting leads (requires auth)"""
-        if not self.token:
-            print("⚠️  Skipping Get Leads - No auth token")
-            return False
+    def test_analytics_endpoint(self):
+        """Test analytics dashboard endpoint"""
+        print("\n📊 Testing Analytics Endpoint...")
         
-        return self.run_test("Get Leads", "GET", "leads", 200)
+        success, status, response = self.make_request('GET', '/analytics')
+        
+        if success:
+            # Verify analytics data structure
+            required_sections = ['leads', 'content', 'campaigns', 'schedule']
+            has_all_sections = all(section in response for section in required_sections)
+            
+            # Check leads section
+            leads_valid = (
+                'total' in response.get('leads', {}) and
+                'by_status' in response.get('leads', {}) and
+                'by_date' in response.get('leads', {})
+            )
+            
+            # Check content section
+            content_valid = (
+                'total_batches' in response.get('content', {}) and
+                'total_posts' in response.get('content', {}) and
+                'by_platform' in response.get('content', {})
+            )
+            
+            # Check campaigns section
+            campaigns_valid = (
+                'total' in response.get('campaigns', {}) and
+                'by_status' in response.get('campaigns', {})
+            )
+            
+            # Check schedule section
+            schedule_valid = (
+                'total' in response.get('schedule', {}) and
+                'by_status' in response.get('schedule', {}) and
+                'by_platform' in response.get('schedule', {})
+            )
+            
+            structure_valid = has_all_sections and leads_valid and content_valid and campaigns_valid and schedule_valid
+            
+            details = f"Sections: {has_all_sections}, Leads: {response.get('leads', {}).get('total', 0)}, Content: {response.get('content', {}).get('total_posts', 0)}"
+            self.log_test("GET /api/analytics - Analytics data structure", structure_valid, status, details)
+        else:
+            self.log_test("GET /api/analytics - Get analytics", False, status, f"Error: {response}")
 
-    def test_contractor_profile(self):
-        """Test getting contractor profile (requires auth)"""
-        if not self.token:
-            print("⚠️  Skipping Contractor Profile - No auth token")
-            return False
+    def test_integration_workflow(self):
+        """Test complete workflow integration"""
+        print("\n🔄 Testing Integration Workflow...")
         
-        return self.run_test("Get Contractor Profile", "GET", "contractors/me/profile", 200)
-
-    def test_chat_functionality(self):
-        """Test AI chat functionality"""
-        import uuid
-        session_id = f"test_{uuid.uuid4().hex[:8]}"
-        
-        chat_data = {
-            "message": "What are the main benefits of ICF construction?",
-            "session_id": session_id
-        }
-        
-        success, response = self.run_test(
-            "AI Chat Functionality", 
-            "POST", 
-            "chat", 
-            200, 
-            chat_data
-        )
-        
-        if success and 'response' in response:
-            print(f"   AI Response preview: {response['response'][:100]}...")
-            return True
-        return False
-
-    def test_contact_submission(self):
-        """Test contact form submission"""
-        timestamp = datetime.now().strftime("%H%M%S")
-        contact_data = {
-            "name": f"Jane Smith {timestamp}",
-            "email": f"jane{timestamp}@example.com",
-            "message": "I'm interested in learning more about ICF construction options."
-        }
-        
-        return self.run_test(
-            "Contact Form Submission", 
-            "POST", 
-            "contact", 
-            200, 
-            contact_data
-        )
-
-    # ======== NEW AI AGENT FEATURE TESTS ========
-    
-    def test_content_generator(self):
-        """Test AI Content Generator endpoint"""
-        if not self.token:
-            print("⚠️  Skipping Content Generator - No auth token")
-            return False
-        
+        # Step 1: Generate content
         content_data = {
             "platform": "facebook",
-            "content_type": "educational", 
-            "topic": "ICF hurricane resistance",
+            "content_type": "educational",
+            "topic": "ICF energy savings",
             "tone": "professional",
             "count": 2
         }
+        success, status, response = self.make_request('POST', '/content/generate', content_data)
+        content_generated = success and 'items' in response and len(response.get('items', [])) > 0
+        self.log_test("Content Generation for Scheduling", content_generated, status)
         
-        success, response = self.run_test(
-            "AI Content Generation", 
-            "POST", 
-            "content/generate", 
-            200, 
-            content_data
-        )
-        
-        if success and 'items' in response:
-            print(f"   Generated {len(response['items'])} content items")
-            # Store content ID for later tests
-            self.content_id = response.get('id')
-            return True
-        return False
+        if content_generated and response.get('items'):
+            # Step 2: Schedule the generated content
+            content_item = response['items'][0]
+            tomorrow = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+            
+            schedule_data = {
+                "platform": "facebook",
+                "content": content_item.get('text', 'Generated ICF content'),
+                "hashtags": content_item.get('hashtags', ['#ICF']),
+                "cta": content_item.get('cta', 'Learn more'),
+                "scheduled_date": tomorrow,
+                "scheduled_time": "15:00",
+                "content_type": "educational"
+            }
+            
+            success, status, response = self.make_request('POST', '/schedule', schedule_data, 201)
+            workflow_complete = success and 'id' in response
+            self.log_test("Content → Schedule Workflow", workflow_complete, status)
 
-    def test_get_content_history(self):
-        """Test getting content history"""
-        if not self.token:
-            print("⚠️  Skipping Content History - No auth token")
+    def run_all_tests(self):
+        """Run complete test suite"""
+        print("🧪 Starting ICF Hub New Features API Tests")
+        print(f"🌐 Testing against: {self.base_url}")
+        print("=" * 60)
+        
+        # Authentication setup
+        if not self.test_auth_setup():
+            print("❌ Authentication failed - stopping tests")
             return False
         
-        return self.run_test("Get Content History", "GET", "content", 200)
-
-    def test_create_campaign(self):
-        """Test creating a marketing campaign"""
-        if not self.token:
-            print("⚠️  Skipping Create Campaign - No auth token")
-            return False
+        # Core feature tests
+        self.test_schedule_endpoints()
+        self.test_notifications_endpoints()
+        self.test_analytics_endpoint()
+        self.test_integration_workflow()
         
-        campaign_data = {
-            "name": "Spring ICF Test Campaign",
-            "goal": "leads",
-            "platforms": ["facebook", "instagram"],
-            "target_audience": "Texas homeowners planning new builds",
-            "duration_days": 14,
-            "description": "Focus on energy efficiency and hurricane resistance"
-        }
+        # Print summary
+        print("\n" + "=" * 60)
+        print(f"📋 TEST SUMMARY")
+        print(f"Tests Run: {self.tests_run}")
+        print(f"Tests Passed: {self.tests_passed}")
+        print(f"Tests Failed: {self.tests_run - self.tests_passed}")
+        print(f"Success Rate: {(self.tests_passed/max(self.tests_run,1))*100:.1f}%")
         
-        success, response = self.run_test(
-            "Create Campaign", 
-            "POST", 
-            "campaigns", 
-            200, 
-            campaign_data
-        )
+        # List failures
+        failures = [r for r in self.test_results if not r['success']]
+        if failures:
+            print(f"\n❌ Failed Tests ({len(failures)}):")
+            for fail in failures:
+                print(f"  - {fail['test_name']}: {fail['details']}")
         
-        if success and 'id' in response:
-            self.campaign_id = response['id']
-            print(f"   Campaign ID: {self.campaign_id}")
-            return True
-        return False
-
-    def test_get_campaigns(self):
-        """Test getting campaigns list"""
-        if not self.token:
-            print("⚠️  Skipping Get Campaigns - No auth token")
-            return False
-        
-        return self.run_test("Get Campaigns", "GET", "campaigns", 200)
-
-    def test_generate_campaign_content(self):
-        """Test AI campaign content generation"""
-        if not self.token or not hasattr(self, 'campaign_id'):
-            print("⚠️  Skipping Campaign Content Generation - No auth token or campaign")
-            return False
-        
-        success, response = self.run_test(
-            "Generate Campaign Content", 
-            "POST", 
-            f"campaigns/{self.campaign_id}/generate", 
-            200, 
-            {}
-        )
-        
-        if success and 'ai_content' in response:
-            content = response['ai_content']
-            if 'content_calendar' in content:
-                print(f"   Generated {len(content['content_calendar'])} calendar posts")
-            return True
-        return False
-
-    def test_lead_scoring(self):
-        """Test AI lead scoring"""
-        if not self.token or not hasattr(self, 'lead_id'):
-            print("⚠️  Skipping Lead Scoring - No auth token or lead")
-            return False
-        
-        success, response = self.run_test(
-            "AI Lead Scoring", 
-            "POST", 
-            f"leads/{self.lead_id}/score", 
-            200, 
-            {}
-        )
-        
-        if success and 'ai_score' in response:
-            score = response['ai_score']
-            print(f"   Lead scored: {score.get('score', 'N/A')} (Grade: {score.get('grade', 'N/A')})")
-            return True
-        return False
-
-def main():
-    print("🏗️  ICF Hub Backend API Testing")
-    print("=" * 50)
-    
-    tester = ICFHubAPITester()
-    
-    # Core functionality tests
-    print("\n📊 TESTING CORE ENDPOINTS")
-    tester.test_health()
-    tester.test_stats()
-    
-    # Authentication tests
-    print("\n🔐 TESTING AUTHENTICATION")
-    tester.test_contractor_register()
-    # Note: Login test would need existing credentials or we'd need to modify the approach
-    
-    # Data tests
-    print("\n📋 TESTING DATA ENDPOINTS")
-    tester.test_get_contractors()
-    tester.test_create_lead()
-    tester.test_get_leads()
-    tester.test_contractor_profile()
-    
-    # Advanced features - Original AI Chat
-    print("\n🤖 TESTING AI CHAT FEATURES")
-    tester.test_chat_functionality()
-    
-    # Contact form
-    print("\n📞 TESTING CONTACT FEATURES")
-    tester.test_contact_submission()
-    
-    # NEW AI AGENT FEATURES
-    print("\n✨ TESTING NEW AI AGENT FEATURES")
-    print("   Testing AI Content Generator...")
-    tester.test_content_generator()
-    tester.test_get_content_history()
-    
-    print("   Testing AI Campaign Manager...")
-    tester.test_create_campaign()
-    tester.test_get_campaigns()
-    tester.test_generate_campaign_content()
-    
-    print("   Testing AI Lead Scoring...")
-    tester.test_lead_scoring()
-    
-    # Print summary
-    print("\n" + "=" * 50)
-    print("📊 TEST SUMMARY")
-    print("=" * 50)
-    print(f"✅ Tests passed: {tester.tests_passed}/{tester.tests_run}")
-    print(f"❌ Tests failed: {len(tester.failed_tests)}")
-    
-    if tester.failed_tests:
-        print("\n❌ FAILED TESTS:")
-        for failure in tester.failed_tests:
-            print(f"  • {failure}")
-    
-    # Return success/failure code
-    return 0 if tester.tests_passed == tester.tests_run else 1
+        return self.tests_passed == self.tests_run
 
 if __name__ == "__main__":
-    sys.exit(main())
+    tester = ICFHubAPITester()
+    success = tester.run_all_tests()
+    sys.exit(0 if success else 1)
