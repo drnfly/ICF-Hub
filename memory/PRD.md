@@ -41,11 +41,12 @@ User with 10 years ICF construction experience wants a platform to generate reve
 - **Auto-Scheduling** — Schedule individual or bulk posts from content generator, publish from calendar
 - **Analytics Dashboard** — Real-time charts: lead pipeline, leads over time, content by platform, campaign status, scheduled post stats (recharts)
 - **Notification System** — In-app notifications triggered on new leads and post publishing, with unread count badge, mark read/all read
+- **Connect Social Media** — Settings page to link Facebook, Instagram, LinkedIn, X/Twitter, TikTok accounts with API tokens. Connection summary dashboard. Calendar shows auto-post status per platform. Publish flow checks connected accounts.
 
 ## Prioritized Backlog
 ### P0
 - Stripe payment integration for contractor subscriptions
-- Connect to real social media APIs (Facebook Graph, LinkedIn, X) for actual auto-posting
+- Implement real social media API posting (Facebook Graph, LinkedIn, X APIs) using stored tokens
 - Real email notifications via SendGrid/Resend (currently in-app only)
 
 ### P1
