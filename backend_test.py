@@ -212,6 +212,123 @@ class ICFHubAPITester:
             contact_data
         )
 
+    # ======== NEW AI AGENT FEATURE TESTS ========
+    
+    def test_content_generator(self):
+        """Test AI Content Generator endpoint"""
+        if not self.token:
+            print("⚠️  Skipping Content Generator - No auth token")
+            return False
+        
+        content_data = {
+            "platform": "facebook",
+            "content_type": "educational", 
+            "topic": "ICF hurricane resistance",
+            "tone": "professional",
+            "count": 2
+        }
+        
+        success, response = self.run_test(
+            "AI Content Generation", 
+            "POST", 
+            "content/generate", 
+            200, 
+            content_data
+        )
+        
+        if success and 'items' in response:
+            print(f"   Generated {len(response['items'])} content items")
+            # Store content ID for later tests
+            self.content_id = response.get('id')
+            return True
+        return False
+
+    def test_get_content_history(self):
+        """Test getting content history"""
+        if not self.token:
+            print("⚠️  Skipping Content History - No auth token")
+            return False
+        
+        return self.run_test("Get Content History", "GET", "content", 200)
+
+    def test_create_campaign(self):
+        """Test creating a marketing campaign"""
+        if not self.token:
+            print("⚠️  Skipping Create Campaign - No auth token")
+            return False
+        
+        campaign_data = {
+            "name": "Spring ICF Test Campaign",
+            "goal": "leads",
+            "platforms": ["facebook", "instagram"],
+            "target_audience": "Texas homeowners planning new builds",
+            "duration_days": 14,
+            "description": "Focus on energy efficiency and hurricane resistance"
+        }
+        
+        success, response = self.run_test(
+            "Create Campaign", 
+            "POST", 
+            "campaigns", 
+            200, 
+            campaign_data
+        )
+        
+        if success and 'id' in response:
+            self.campaign_id = response['id']
+            print(f"   Campaign ID: {self.campaign_id}")
+            return True
+        return False
+
+    def test_get_campaigns(self):
+        """Test getting campaigns list"""
+        if not self.token:
+            print("⚠️  Skipping Get Campaigns - No auth token")
+            return False
+        
+        return self.run_test("Get Campaigns", "GET", "campaigns", 200)
+
+    def test_generate_campaign_content(self):
+        """Test AI campaign content generation"""
+        if not self.token or not hasattr(self, 'campaign_id'):
+            print("⚠️  Skipping Campaign Content Generation - No auth token or campaign")
+            return False
+        
+        success, response = self.run_test(
+            "Generate Campaign Content", 
+            "POST", 
+            f"campaigns/{self.campaign_id}/generate", 
+            200, 
+            {}
+        )
+        
+        if success and 'ai_content' in response:
+            content = response['ai_content']
+            if 'content_calendar' in content:
+                print(f"   Generated {len(content['content_calendar'])} calendar posts")
+            return True
+        return False
+
+    def test_lead_scoring(self):
+        """Test AI lead scoring"""
+        if not self.token or not hasattr(self, 'lead_id'):
+            print("⚠️  Skipping Lead Scoring - No auth token or lead")
+            return False
+        
+        success, response = self.run_test(
+            "AI Lead Scoring", 
+            "POST", 
+            f"leads/{self.lead_id}/score", 
+            200, 
+            {}
+        )
+        
+        if success and 'ai_score' in response:
+            score = response['ai_score']
+            print(f"   Lead scored: {score.get('score', 'N/A')} (Grade: {score.get('grade', 'N/A')})")
+            return True
+        return False
+
 def main():
     print("🏗️  ICF Hub Backend API Testing")
     print("=" * 50)
