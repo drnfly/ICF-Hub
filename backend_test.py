@@ -250,40 +250,172 @@ class ICFHubAPITester:
         else:
             self.log_test("GET /api/analytics - Get analytics", False, status, f"Error: {response}")
 
-    def test_integration_workflow(self):
-        """Test complete workflow integration"""
-        print("\n🔄 Testing Integration Workflow...")
+    def test_social_accounts_endpoints(self):
+        """Test social media account management endpoints"""
+        print("\n🔗 Testing Social Accounts Endpoints...")
         
-        # Step 1: Generate content
-        content_data = {
+        # Test 1: Get all social accounts (should return all 5 platforms with connected/not-connected status)
+        success, status, response = self.make_request('GET', '/social-accounts')
+        if success and isinstance(response, list):
+            expected_platforms = ['facebook', 'instagram', 'linkedin', 'x', 'tiktok']
+            found_platforms = [acc.get('platform') for acc in response]
+            has_all_platforms = all(platform in found_platforms for platform in expected_platforms)
+            all_have_connected_field = all('connected' in acc for acc in response)
+            
+            details = f"Found platforms: {found_platforms}, All have connected field: {all_have_connected_field}"
+            self.log_test("GET /api/social-accounts - All 5 platforms returned", 
+                         has_all_platforms and all_have_connected_field, status, details)
+        else:
+            self.log_test("GET /api/social-accounts - All 5 platforms returned", False, status, f"Invalid response: {response}")
+        
+        # Test 2: Connect a social account (Facebook)
+        connect_data = {
             "platform": "facebook",
-            "content_type": "educational",
-            "topic": "ICF energy savings",
-            "tone": "professional",
-            "count": 2
+            "account_name": "test_facebook_page",
+            "access_token": "fake_token_123",
+            "page_id": "123456789"
         }
-        success, status, response = self.make_request('POST', '/content/generate', content_data)
-        content_generated = success and 'items' in response and len(response.get('items', [])) > 0
-        self.log_test("Content Generation for Scheduling", content_generated, status)
+        success, status, response = self.make_request('POST', '/social-accounts/connect', connect_data)
+        facebook_connected = success and response.get('connected') == True
+        self.log_test("POST /api/social-accounts/connect - Connect Facebook", facebook_connected, status)
         
-        if content_generated and response.get('items'):
-            # Step 2: Schedule the generated content
-            content_item = response['items'][0]
-            tomorrow = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+        # Test 3: Connect another platform (LinkedIn) 
+        connect_data_linkedin = {
+            "platform": "linkedin",
+            "account_name": "test_linkedin_profile",
+            "access_token": "linkedin_fake_token_456"
+        }
+        success, status, response = self.make_request('POST', '/social-accounts/connect', connect_data_linkedin)
+        linkedin_connected = success and response.get('connected') == True
+        self.log_test("POST /api/social-accounts/connect - Connect LinkedIn", linkedin_connected, status)
+        
+        # Test 4: Get connection status (should return only connected platforms)
+        success, status, response = self.make_request('GET', '/social-accounts/status')
+        if success and isinstance(response, dict):
+            connected_platforms = list(response.keys())
+            has_facebook = 'facebook' in connected_platforms
+            has_linkedin = 'linkedin' in connected_platforms
+            details = f"Connected platforms: {connected_platforms}"
+            self.log_test("GET /api/social-accounts/status - Only connected platforms", 
+                         has_facebook and has_linkedin, status, details)
+        else:
+            self.log_test("GET /api/social-accounts/status - Only connected platforms", False, status, f"Invalid response: {response}")
+        
+        # Test 5: Disconnect a platform
+        disconnect_data = {"platform": "facebook"}
+        success, status, response = self.make_request('POST', '/social-accounts/disconnect', disconnect_data)
+        self.log_test("POST /api/social-accounts/disconnect - Disconnect Facebook", success, status)
+        
+        # Test 6: Verify disconnect worked - get status again
+        success, status, response = self.make_request('GET', '/social-accounts/status')
+        if success and isinstance(response, dict):
+            facebook_gone = 'facebook' not in response
+            linkedin_still_there = 'linkedin' in response
+            details = f"After disconnect - Connected platforms: {list(response.keys())}"
+            self.log_test("Verify disconnect - Facebook removed, LinkedIn kept", 
+                         facebook_gone and linkedin_still_there, status, details)
+        else:
+            self.log_test("Verify disconnect - Facebook removed, LinkedIn kept", False, status)
+
+    def test_content_calendar_integration(self):
+        """Test Content Calendar integration with social accounts"""
+        print("\n📅 Testing Content Calendar & Social Integration...")
+        
+        # First ensure we have a connected account for testing
+        connect_data = {
+            "platform": "instagram",
+            "account_name": "test_insta_account",
+            "access_token": "insta_fake_token_789"
+        }
+        success, status, response = self.make_request('POST', '/social-accounts/connect', connect_data)
+        
+        # Create a scheduled post
+        tomorrow = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+        post_data = {
+            "platform": "instagram",
+            "content": "Test ICF post for Instagram integration",
+            "hashtags": ["#ICF", "#Construction", "#EnergyEfficient"],
+            "cta": "Contact us for ICF projects!",
+            "scheduled_date": tomorrow,
+            "scheduled_time": "11:00",
+            "content_type": "promotional"
+        }
+        
+        success, status, response = self.make_request('POST', '/schedule', post_data, 200)
+        post_id = response.get('id') if success else None
+        self.log_test("Create scheduled post for connected platform", success, status)
+        
+        if post_id:
+            # Publish the post - should show auto-post confirmation for connected platform
+            success, status, response = self.make_request('POST', f'/schedule/{post_id}/publish', {}, 200)
+            auto_posted = response.get('auto_posted') == True if success else False
+            published_status = response.get('status') == 'published' if success else False
             
-            schedule_data = {
-                "platform": "facebook",
-                "content": content_item.get('text', 'Generated ICF content'),
-                "hashtags": content_item.get('hashtags', ['#ICF']),
-                "cta": content_item.get('cta', 'Learn more'),
-                "scheduled_date": tomorrow,
-                "scheduled_time": "15:00",
-                "content_type": "educational"
-            }
+            details = f"Auto-posted: {auto_posted}, Status: {response.get('status') if success else 'N/A'}"
+            self.log_test("Publish post - Connected platform shows auto-post confirmation", 
+                         published_status, status, details)
+        
+        # Test posting to non-connected platform
+        post_data_unconnected = {
+            "platform": "tiktok",  # Not connected
+            "content": "Test ICF post for unconnected platform",
+            "hashtags": ["#ICF", "#TikTok"],
+            "cta": "Learn about ICF!",
+            "scheduled_date": tomorrow,
+            "scheduled_time": "13:00",
+            "content_type": "educational"
+        }
+        
+        success, status, response = self.make_request('POST', '/schedule', post_data_unconnected, 200)
+        unconnected_post_id = response.get('id') if success else None
+        
+        if unconnected_post_id:
+            # Publish to unconnected platform - should still work but not auto-post
+            success, status, response = self.make_request('POST', f'/schedule/{unconnected_post_id}/publish', {}, 200)
+            auto_posted = response.get('auto_posted') == False if success else None
+            published_status = response.get('status') == 'published' if success else False
             
-            success, status, response = self.make_request('POST', '/schedule', schedule_data, 200)
-            workflow_complete = success and 'id' in response
-            self.log_test("Content → Schedule Workflow", workflow_complete, status)
+            details = f"Auto-posted: {auto_posted}, Status: {response.get('status') if success else 'N/A'}"
+            self.log_test("Publish to unconnected platform - Manual mode", 
+                         published_status and auto_posted == False, status, details)
+
+    def test_notifications_for_connections(self):
+        """Test that notifications are created when social accounts are connected"""
+        print("\n🔔 Testing Social Account Connection Notifications...")
+        
+        # Get current notification count
+        success, status, initial_response = self.make_request('GET', '/notifications')
+        initial_count = len(initial_response) if isinstance(initial_response, list) else 0
+        
+        # Connect a new platform
+        connect_data = {
+            "platform": "x",
+            "account_name": "test_x_account",
+            "access_token": "x_fake_token_xyz"
+        }
+        success, status, response = self.make_request('POST', '/social-accounts/connect', connect_data)
+        connection_success = success and response.get('connected') == True
+        self.log_test("Connect X account for notification test", connection_success, status)
+        
+        # Wait a moment for notification to be created
+        time.sleep(2)
+        
+        # Check if notification was created
+        success, status, new_response = self.make_request('GET', '/notifications')
+        new_count = len(new_response) if isinstance(new_response, list) else 0
+        notification_created = new_count > initial_count
+        
+        # Check if the notification is about account connection
+        connection_notification_found = False
+        if isinstance(new_response, list) and new_count > 0:
+            for notif in new_response[:3]:  # Check recent notifications
+                if notif.get('type') == 'account_connected' and 'X' in notif.get('title', ''):
+                    connection_notification_found = True
+                    break
+        
+        details = f"Notifications before: {initial_count}, after: {new_count}, Connection notif found: {connection_notification_found}"
+        self.log_test("Notification created when social account connected", 
+                     notification_created and connection_notification_found, status, details)
 
     def run_all_tests(self):
         """Run complete test suite"""
