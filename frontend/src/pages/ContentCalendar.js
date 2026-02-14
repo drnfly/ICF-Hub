@@ -33,6 +33,7 @@ export default function ContentCalendar() {
   const [filterPlatform, setFilterPlatform] = useState("all");
   const [selectedPost, setSelectedPost] = useState(null);
   const [publishing, setPublishing] = useState(null);
+  const [connectedPlatforms, setConnectedPlatforms] = useState({});
 
   useEffect(() => {
     if (!token) { navigate("/auth"); return; }
