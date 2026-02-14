@@ -15,6 +15,7 @@ import ContentGenerator from "@/pages/ContentGenerator";
 import CampaignManager from "@/pages/CampaignManager";
 import ContentCalendar from "@/pages/ContentCalendar";
 import AnalyticsDashboard from "@/pages/AnalyticsDashboard";
+import SocialSettings from "@/pages/SocialSettings";
 
 function App() {
   return (
@@ -34,6 +35,7 @@ function App() {
             <Route path="/campaigns" element={<CampaignManager />} />
             <Route path="/calendar" element={<ContentCalendar />} />
             <Route path="/analytics" element={<AnalyticsDashboard />} />
+            <Route path="/social" element={<SocialSettings />} />
           </Routes>
         </main>
         <Footer />
