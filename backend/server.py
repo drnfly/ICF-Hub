@@ -693,6 +693,99 @@ async def bulk_schedule_posts(posts: List[SchedulePostCreate], user=Depends(get_
         created.append({k: v for k, v in doc.items() if k != "_id"})
     return created
 
+# ─── Social Media Accounts ───
+
+PLATFORM_META = {
+    "facebook": {"name": "Facebook", "auth_url": "https://developers.facebook.com/apps/", "fields": ["page_id", "access_token"]},
+    "instagram": {"name": "Instagram", "auth_url": "https://developers.facebook.com/apps/", "fields": ["account_name", "access_token"]},
+    "linkedin": {"name": "LinkedIn", "auth_url": "https://www.linkedin.com/developers/apps/", "fields": ["access_token"]},
+    "x": {"name": "X / Twitter", "auth_url": "https://developer.x.com/en/portal/dashboard", "fields": ["access_token"]},
+    "tiktok": {"name": "TikTok", "auth_url": "https://developers.tiktok.com/", "fields": ["access_token"]},
+}
+
+@api_router.get("/social-accounts")
+async def get_social_accounts(user=Depends(get_current_contractor)):
+    accounts = await db.social_accounts.find(
+        {"contractor_id": user["id"]}, {"_id": 0}
+    ).to_list(20)
+    # Fill in all platforms with defaults
+    connected_platforms = {a["platform"]: a for a in accounts}
+    result = []
+    for platform, meta in PLATFORM_META.items():
+        if platform in connected_platforms:
+            acct = connected_platforms[platform]
+            acct["platform_name"] = meta["name"]
+            result.append(acct)
+        else:
+            result.append({
+                "platform": platform,
+                "platform_name": meta["name"],
+                "connected": False,
+                "account_name": "",
+                "auth_url": meta["auth_url"]
+            })
+    return result
+
+@api_router.post("/social-accounts/connect")
+async def connect_social_account(data: SocialAccountConnect, user=Depends(get_current_contractor)):
+    if data.platform not in PLATFORM_META:
+        raise HTTPException(status_code=400, detail="Invalid platform")
+
+    existing = await db.social_accounts.find_one(
+        {"contractor_id": user["id"], "platform": data.platform}
+    )
+
+    doc = {
+        "contractor_id": user["id"],
+        "platform": data.platform,
+        "account_name": data.account_name,
+        "access_token": data.access_token,
+        "page_id": data.page_id,
+        "connected": True,
+        "connected_at": datetime.now(timezone.utc).isoformat()
+    }
+
+    if existing:
+        await db.social_accounts.update_one(
+            {"contractor_id": user["id"], "platform": data.platform},
+            {"$set": doc}
+        )
+    else:
+        doc["id"] = str(uuid.uuid4())
+        await db.social_accounts.insert_one(doc)
+
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "contractor_id": user["id"],
+        "type": "account_connected",
+        "title": f"{PLATFORM_META[data.platform]['name']} Connected",
+        "message": f"Your {PLATFORM_META[data.platform]['name']} account '{data.account_name}' has been connected. Posts to this platform will now auto-publish.",
+        "read": False,
+        "emailed": False,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+
+    safe_doc = {k: v for k, v in doc.items() if k not in ["_id", "access_token"]}
+    safe_doc["platform_name"] = PLATFORM_META[data.platform]["name"]
+    return safe_doc
+
+@api_router.post("/social-accounts/disconnect")
+async def disconnect_social_account(data: SocialAccountDisconnect, user=Depends(get_current_contractor)):
+    result = await db.social_accounts.update_one(
+        {"contractor_id": user["id"], "platform": data.platform},
+        {"$set": {"connected": False, "access_token": "", "disconnected_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return {"message": f"{data.platform.title()} disconnected"}
+
+@api_router.get("/social-accounts/status")
+async def get_connection_status(user=Depends(get_current_contractor)):
+    accounts = await db.social_accounts.find(
+        {"contractor_id": user["id"], "connected": True}, {"_id": 0, "platform": 1, "account_name": 1}
+    ).to_list(10)
+    return {a["platform"]: a.get("account_name", "Connected") for a in accounts}
+
 # ─── Notifications Endpoints ───
 
 @api_router.get("/notifications")
