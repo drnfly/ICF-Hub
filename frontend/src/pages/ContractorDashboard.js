@@ -20,6 +20,7 @@ export default function ContractorDashboard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profileForm, setProfileForm] = useState({});
+  const [scoringLead, setScoringLead] = useState(null);
   const token = localStorage.getItem("icf_token");
 
   useEffect(() => {
