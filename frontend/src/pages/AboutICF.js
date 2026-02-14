@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Check, X } from "lucide-react";
+import { ArrowRight, Check, ChevronRight } from "lucide-react";
 
 export default function AboutICF() {
   const navigate = useNavigate();
