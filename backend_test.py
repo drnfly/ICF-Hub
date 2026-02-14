@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Backend API Testing for ICF Hub New Features
-Testing: Auto-scheduling, Email notifications, Analytics dashboard, Content Calendar
+Backend API Testing for ICF Hub Social Media Connect Features
+Testing: Social accounts endpoints, connection status, Content Calendar integration
 """
 import requests
 import json
