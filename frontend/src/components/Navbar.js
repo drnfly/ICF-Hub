@@ -18,7 +18,13 @@ export default function Navbar() {
 
   useEffect(() => { setIsOpen(false); }, [location]);
 
-  const navLinks = [
+  const navLinks = token ? [
+    { to: "/dashboard", label: "DASHBOARD" },
+    { to: "/content", label: "AI CONTENT" },
+    { to: "/campaigns", label: "CAMPAIGNS" },
+    { to: "/contractors", label: "DIRECTORY" },
+    { to: "/get-quote", label: "GET QUOTE" },
+  ] : [
     { to: "/about-icf", label: "WHY ICF" },
     { to: "/contractors", label: "CONTRACTORS" },
     { to: "/pricing", label: "PRICING" },
