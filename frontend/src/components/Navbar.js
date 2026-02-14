@@ -80,6 +80,14 @@ export default function Navbar() {
             {token ? (
               <>
                 <button
+                  data-testid="nav-social-btn"
+                  onClick={() => navigate("/social")}
+                  className="p-2 hover:bg-muted rounded-sm transition-colors"
+                  title="Connected Accounts"
+                >
+                  <Settings className="w-4 h-4" />
+                </button>
+                <button
                   data-testid="nav-notifications-btn"
                   onClick={() => navigate("/dashboard")}
                   className="relative p-2 hover:bg-muted rounded-sm transition-colors"
