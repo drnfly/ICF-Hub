@@ -163,12 +163,13 @@ export default function ContractorDashboard() {
         </div>
 
         {/* AI Tools Quick Access */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
           {[
-            { testid: "dashboard-content-agent", icon: Sparkles, title: "AI Content Generator", desc: "Create SEO social media posts", to: "/content" },
-            { testid: "dashboard-campaign-agent", icon: Zap, title: "AI Campaign Manager", desc: "Multi-platform marketing campaigns", to: "/campaigns" },
-            { testid: "dashboard-calendar-link", icon: Calendar, title: "Content Calendar", desc: "Schedule and publish posts", to: "/calendar" },
-            { testid: "dashboard-analytics-link", icon: BarChart3, title: "Analytics Dashboard", desc: "Track leads and performance", to: "/analytics" },
+            { testid: "dashboard-content-agent", icon: Sparkles, title: "AI Content", desc: "Create SEO social posts", to: "/content" },
+            { testid: "dashboard-campaign-agent", icon: Zap, title: "Campaigns", desc: "Multi-platform campaigns", to: "/campaigns" },
+            { testid: "dashboard-calendar-link", icon: Calendar, title: "Calendar", desc: "Schedule & publish posts", to: "/calendar" },
+            { testid: "dashboard-analytics-link", icon: BarChart3, title: "Analytics", desc: "Track performance", to: "/analytics" },
+            { testid: "dashboard-social-link", icon: Link2, title: "Social Accounts", desc: "Connect platforms", to: "/social" },
           ].map((tool) => (
             <div
               key={tool.testid}
