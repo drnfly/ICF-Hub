@@ -1,11 +1,15 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X, Zap, Sparkles } from "lucide-react";
+import { Menu, X, Zap, Sparkles, Bell } from "lucide-react";
+import axios from "axios";
+
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [unread, setUnread] = useState(0);
   const location = useLocation();
   const navigate = useNavigate();
   const token = localStorage.getItem("icf_token");
