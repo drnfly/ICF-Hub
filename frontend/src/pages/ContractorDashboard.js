@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { LogOut, User, FileText, Loader2, Mail, Phone, MapPin, Save, Sparkles, Zap, ArrowRight, Bell, Calendar, BarChart3, CheckCircle } from "lucide-react";
+import { LogOut, User, FileText, Loader2, Mail, Phone, MapPin, Save, Sparkles, Zap, ArrowRight, Bell, Calendar, BarChart3, CheckCircle, Link2 } from "lucide-react";
 import axios from "axios";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
