@@ -289,6 +289,263 @@ async def create_contact(data: ContactCreate):
     await db.contact_submissions.insert_one(doc)
     return {k: v for k, v in doc.items() if k != "_id"}
 
+# ─── AI Content Agent ───
+
+CONTENT_SYSTEM_PROMPT = """You are an expert ICF (Insulated Concrete Forms) construction social media content creator and SEO specialist. Generate engaging, platform-specific content that:
+- Educates homeowners about ICF benefits (energy savings 50-70%, disaster resistance, durability 100+ years, sound insulation)
+- Drives leads for ICF contractors
+- Uses SEO-optimized keywords naturally
+- Includes relevant hashtags for the platform
+- Matches the platform's ideal content format and length
+
+Platform guidelines:
+- Facebook: 100-250 words, conversational, include CTA, 3-5 hashtags
+- Instagram: 80-150 words, visual-first caption, 15-20 hashtags at end, include emojis
+- LinkedIn: 150-300 words, professional tone, industry insights, 3-5 hashtags
+- X/Twitter: Under 280 characters, punchy, 2-3 hashtags
+- TikTok: 50-100 word script with hook, body, CTA format, trending hashtags
+
+Always return valid JSON array of content objects with keys: text, hashtags, cta, seo_keywords"""
+
+@api_router.post("/content/generate")
+async def generate_content(data: ContentGenerateRequest, user=Depends(get_current_contractor)):
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(status_code=500, detail="AI service not configured")
+
+    session_id = f"content_{user['id']}_{uuid.uuid4().hex[:8]}"
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=session_id,
+        system_message=CONTENT_SYSTEM_PROMPT
+    )
+
+    prompt = f"""Generate {data.count} unique {data.content_type} social media posts for {data.platform}.
+Topic focus: {data.topic if data.topic else 'ICF construction benefits and lead generation'}
+Tone: {data.tone}
+Return ONLY a valid JSON array with objects containing: text, hashtags (array), cta, seo_keywords (array)"""
+
+    try:
+        response = await chat.send_message(UserMessage(text=prompt))
+        import json
+        clean = response.strip()
+        if clean.startswith("```"):
+            clean = clean.split("\n", 1)[1] if "\n" in clean else clean[3:]
+            clean = clean.rsplit("```", 1)[0]
+        content_items = json.loads(clean)
+    except json.JSONDecodeError:
+        content_items = [{"text": response, "hashtags": [], "cta": "Learn more about ICF", "seo_keywords": ["ICF construction"]}]
+    except Exception as e:
+        logger.error(f"Content generation error: {e}")
+        raise HTTPException(status_code=500, detail="AI content generation failed")
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "contractor_id": user["id"],
+        "platform": data.platform,
+        "content_type": data.content_type,
+        "topic": data.topic,
+        "tone": data.tone,
+        "items": content_items,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.generated_content.insert_one(doc)
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+@api_router.get("/content")
+async def get_content(user=Depends(get_current_contractor)):
+    content = await db.generated_content.find(
+        {"contractor_id": user["id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    return content
+
+@api_router.delete("/content/{content_id}")
+async def delete_content(content_id: str, user=Depends(get_current_contractor)):
+    result = await db.generated_content.delete_one({"id": content_id, "contractor_id": user["id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Content not found")
+    return {"message": "Deleted"}
+
+# ─── AI Campaign Agent ───
+
+CAMPAIGN_SYSTEM_PROMPT = """You are an expert ICF construction marketing campaign strategist. Create comprehensive marketing campaigns that:
+- Target homeowners considering new construction or major renovations
+- Highlight ICF benefits: energy efficiency, disaster resistance, durability, ROI
+- Include content for multiple social media platforms
+- Have clear CTAs driving lead generation
+- Use SEO-optimized language
+
+When generating campaign content, return valid JSON with structure:
+{
+  "strategy": "overall campaign strategy description",
+  "content_calendar": [
+    {
+      "day": 1,
+      "platform": "facebook",
+      "content_type": "educational",
+      "post_text": "the actual post",
+      "hashtags": ["tag1", "tag2"],
+      "best_time": "10:00 AM",
+      "cta": "call to action"
+    }
+  ],
+  "seo_keywords": ["keyword1", "keyword2"],
+  "target_metrics": {"reach": "estimated reach", "engagement": "estimated engagement rate"}
+}"""
+
+@api_router.post("/campaigns")
+async def create_campaign(data: CampaignCreate, user=Depends(get_current_contractor)):
+    campaign_id = str(uuid.uuid4())
+    doc = {
+        "id": campaign_id,
+        "contractor_id": user["id"],
+        **data.model_dump(),
+        "status": "draft",
+        "ai_content": None,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.campaigns.insert_one(doc)
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+@api_router.get("/campaigns")
+async def get_campaigns(user=Depends(get_current_contractor)):
+    campaigns = await db.campaigns.find(
+        {"contractor_id": user["id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    return campaigns
+
+@api_router.post("/campaigns/{campaign_id}/generate")
+async def generate_campaign_content(campaign_id: str, user=Depends(get_current_contractor)):
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(status_code=500, detail="AI service not configured")
+
+    campaign = await db.campaigns.find_one(
+        {"id": campaign_id, "contractor_id": user["id"]}, {"_id": 0}
+    )
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    session_id = f"campaign_{campaign_id}_{uuid.uuid4().hex[:8]}"
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=session_id,
+        system_message=CAMPAIGN_SYSTEM_PROMPT
+    )
+
+    platforms_str = ", ".join(campaign["platforms"])
+    prompt = f"""Create a {campaign['duration_days']}-day ICF construction marketing campaign.
+Campaign name: {campaign['name']}
+Goal: {campaign['goal']}
+Platforms: {platforms_str}
+Target audience: {campaign['target_audience']}
+Additional context: {campaign.get('description', 'N/A')}
+
+Generate a content calendar with {min(campaign['duration_days'], 14)} posts spread across the platforms.
+Return ONLY valid JSON with keys: strategy, content_calendar (array of objects with day, platform, content_type, post_text, hashtags, best_time, cta), seo_keywords (array), target_metrics (object)."""
+
+    try:
+        response = await chat.send_message(UserMessage(text=prompt))
+        import json
+        clean = response.strip()
+        if clean.startswith("```"):
+            clean = clean.split("\n", 1)[1] if "\n" in clean else clean[3:]
+            clean = clean.rsplit("```", 1)[0]
+        ai_content = json.loads(clean)
+    except json.JSONDecodeError:
+        ai_content = {"strategy": response, "content_calendar": [], "seo_keywords": [], "target_metrics": {}}
+    except Exception as e:
+        logger.error(f"Campaign generation error: {e}")
+        raise HTTPException(status_code=500, detail="AI campaign generation failed")
+
+    await db.campaigns.update_one(
+        {"id": campaign_id},
+        {"$set": {"ai_content": ai_content, "status": "generated"}}
+    )
+    campaign["ai_content"] = ai_content
+    campaign["status"] = "generated"
+    return campaign
+
+@api_router.put("/campaigns/{campaign_id}/status")
+async def update_campaign_status(campaign_id: str, data: LeadStatusUpdate, user=Depends(get_current_contractor)):
+    result = await db.campaigns.update_one(
+        {"id": campaign_id, "contractor_id": user["id"]},
+        {"$set": {"status": data.status}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    return {"message": "Status updated"}
+
+@api_router.delete("/campaigns/{campaign_id}")
+async def delete_campaign(campaign_id: str, user=Depends(get_current_contractor)):
+    result = await db.campaigns.delete_one({"id": campaign_id, "contractor_id": user["id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    return {"message": "Deleted"}
+
+# ─── AI Lead Scoring Agent ───
+
+LEAD_SCORING_PROMPT = """You are an AI lead scoring agent for ICF construction. Score leads based on:
+- Budget (higher = better score)
+- Timeline (sooner = higher urgency)
+- Project type (new home > addition > basement > other)
+- Project size (larger = higher value)
+- Description quality (detailed = more serious buyer)
+
+Return valid JSON:
+{
+  "score": 0-100,
+  "grade": "A/B/C/D",
+  "urgency": "high/medium/low",
+  "estimated_value": "$X - $Y",
+  "insights": "brief analysis",
+  "recommended_action": "what the contractor should do",
+  "follow_up_message": "suggested personalized outreach message"
+}"""
+
+@api_router.post("/leads/{lead_id}/score")
+async def score_lead(lead_id: str, user=Depends(get_current_contractor)):
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(status_code=500, detail="AI service not configured")
+
+    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    session_id = f"score_{lead_id}_{uuid.uuid4().hex[:8]}"
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=session_id,
+        system_message=LEAD_SCORING_PROMPT
+    )
+
+    prompt = f"""Score this ICF construction lead:
+Name: {lead['name']}
+Location: {lead.get('city', 'N/A')}, {lead.get('state', 'N/A')}
+Project type: {lead.get('project_type', 'N/A')}
+Project size: {lead.get('project_size', 'N/A')}
+Budget range: {lead.get('budget_range', 'N/A')}
+Timeline: {lead.get('timeline', 'N/A')}
+Description: {lead.get('description', 'N/A')}
+
+Return ONLY valid JSON with: score, grade, urgency, estimated_value, insights, recommended_action, follow_up_message"""
+
+    try:
+        response = await chat.send_message(UserMessage(text=prompt))
+        import json
+        clean = response.strip()
+        if clean.startswith("```"):
+            clean = clean.split("\n", 1)[1] if "\n" in clean else clean[3:]
+            clean = clean.rsplit("```", 1)[0]
+        score_data = json.loads(clean)
+    except json.JSONDecodeError:
+        score_data = {"score": 50, "grade": "C", "urgency": "medium", "estimated_value": "Unknown", "insights": response, "recommended_action": "Contact the lead", "follow_up_message": ""}
+    except Exception as e:
+        logger.error(f"Lead scoring error: {e}")
+        raise HTTPException(status_code=500, detail="AI lead scoring failed")
+
+    await db.leads.update_one({"id": lead_id}, {"$set": {"ai_score": score_data}})
+    lead["ai_score"] = score_data
+    return lead
+
 # ─── Stats Endpoint ───
 
 @api_router.get("/stats")
