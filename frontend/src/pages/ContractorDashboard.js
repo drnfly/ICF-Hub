@@ -78,6 +78,19 @@ export default function ContractorDashboard() {
     toast.success("Logged out");
   };
 
+  const scoreLead = async (leadId) => {
+    setScoringLead(leadId);
+    try {
+      const { data } = await axios.post(`${API}/leads/${leadId}/score`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ai_score: data.ai_score } : l));
+      toast.success("Lead scored by AI!");
+    } catch {
+      toast.error("Failed to score lead");
+    } finally { setScoringLead(null); }
+  };
+
   if (loading) {
     return (
       <div className="pt-16 min-h-screen flex items-center justify-center">
