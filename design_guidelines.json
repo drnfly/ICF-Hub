@@ -1,0 +1,123 @@
+{
+  "brand_identity": {
+    "name": "ICF Hub",
+    "archetype": "The Architectural Brutalist",
+    "emotional_tone": "Solid, Durable, Future-proof, Efficient, Premium",
+    "description": "A construction platform that feels like a high-end architectural firm meets a fintech dashboard. Raw concrete textures mixed with precision digital overlays."
+  },
+  "typography": {
+    "headings": {
+      "family": "Clash Display, sans-serif",
+      "weights": ["500", "600", "700"],
+      "usage": "Use for all H1-H3. Tight tracking (-0.02em).",
+      "import_url": "https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&display=swap"
+    },
+    "body": {
+      "family": "Manrope, sans-serif",
+      "weights": ["400", "500", "600"],
+      "usage": "Use for all body text and UI elements.",
+      "import_url": "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600&display=swap"
+    },
+    "mono": {
+      "family": "JetBrains Mono, monospace",
+      "usage": "Use for technical specs, data values, and small labels."
+    }
+  },
+  "colors": {
+    "light": {
+      "background": "#F3F4F6", 
+      "foreground": "#1A1A1A",
+      "card": "#FFFFFF",
+      "card_foreground": "#1A1A1A",
+      "primary": "#FF4F00",
+      "primary_foreground": "#FFFFFF",
+      "secondary": "#1A2B3C",
+      "secondary_foreground": "#FFFFFF",
+      "border": "#E5E7EB",
+      "input": "#F3F4F6",
+      "ring": "#FF4F00"
+    },
+    "dark": {
+      "background": "#09090B",
+      "foreground": "#FAFAFA",
+      "card": "#18181B",
+      "card_foreground": "#FAFAFA",
+      "primary": "#FF4F00",
+      "primary_foreground": "#FFFFFF",
+      "secondary": "#27272A",
+      "secondary_foreground": "#FAFAFA",
+      "border": "#27272A",
+      "input": "#27272A",
+      "ring": "#FF4F00"
+    },
+    "palette_notes": "Primary is 'International Orange' for safety/visibility. Backgrounds are 'Concrete Grey' tints. Use High Contrast.",
+    "forbidden_colors": ["#7351B7", "#1B93A4"]
+  },
+  "visual_enhancers": {
+    "textures": "Use subtle noise/grain overlays on backgrounds to mimic concrete texture.",
+    "borders": "Technical 1px borders. Use 'dashed' borders for secondary dividers (like blueprints).",
+    "shadows": "Hard shadows (box-shadow: 4px 4px 0px 0px rgba(0,0,0,0.1)) for buttons to feel physical. Soft ambient shadows for floating cards.",
+    "glassmorphism": "Frosted Concrete: backdrop-blur-md bg-white/80 border-white/40."
+  },
+  "component_rules": {
+    "buttons": {
+      "style": "Sharp edges (rounded-sm). Primary buttons have 'technical' slide-up hover effect.",
+      "padding": "px-6 py-3",
+      "text": "Uppercase, tracking-widest, font-bold, text-sm"
+    },
+    "cards": {
+      "style": "Blueprint style. White bg, thin border, technical corner markers (SVG + absolute positioning).",
+      "hover": "Scale 1.01, border color darkens."
+    },
+    "inputs": {
+      "style": "Flat, filled background (bg-secondary/10), bottom border focus animation."
+    },
+    "bento_grid": {
+      "marketing": "Use 'Tetris' grid: mix col-span-12, col-span-8, col-span-4. Never generic 3-column.",
+      "dashboard": "Dense layout. Gap-4. Use col-span-full for main charts."
+    }
+  },
+  "image_urls": {
+    "hero": {
+      "url": "https://images.unsplash.com/photo-1760478869977-a1b4cf15e929?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBjb25jcmV0ZSUyMGhvdXNlJTIwZXh0ZXJpb3IlMjBhcmNoaXRlY3R1cmV8ZW58MHx8fHwxNzcxMDk4ODU5fDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Modern concrete apartment architecture",
+      "usage": "Main landing page hero background or split screen"
+    },
+    "construction_process": {
+      "url": "https://images.unsplash.com/photo-1685464196339-46a985b2049b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjd8MHwxfHNlYXJjaHwyfHxidWlsZGluZyUyMGZvdW5kYXRpb24lMjBjb25jcmV0ZXxlbnwwfHx8fDE3NzEwOTg4NzB8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Construction worker on building foundation",
+      "usage": "How it works / Process section"
+    },
+    "interior": {
+      "url": "https://images.unsplash.com/photo-1758565811176-ccd94357a844?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODh8MHwxfHNlYXJjaHw0fHxtb2Rlcm4lMjBob21lJTIwaW50ZXJpb3IlMjBjb25jcmV0ZXxlbnwwfHx8fDE3NzEwOTg4NzF8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Modern concrete interior living room",
+      "usage": "Benefits section - Aesthetic appeal"
+    },
+    "professional": {
+      "url": "https://images.unsplash.com/photo-1714575600356-6635434699f8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODF8MHwxfHNlYXJjaHw0fHxhcmNoaXRlY3QlMjBjb25zdHJ1Y3Rpb24lMjBjb25jcmV0ZSUyMHNpdGV8ZW58MHx8fHwxNzcxMDk4ODY5fDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Architect woman with tablet",
+      "usage": "Contractor sign up / About us"
+    }
+  },
+  "layout_strategies": {
+    "marketing": {
+      "hero": "Split screen: Left side bold typography + CTA, Right side Image with 'Technical Specs' overlay.",
+      "features": "Bento Grid. Mix text blocks with image blocks. Add 'blueprint' grid lines in background.",
+      "stats": "Large numbers (text-6xl), font-mono, with technical labels."
+    },
+    "dashboard": {
+      "sidebar": "Dark mode sidebar (Deep Blue/Black) for contrast with Light mode content area.",
+      "cards": "Dense, high information density. No massive padding in dashboard. Use dividers."
+    }
+  },
+  "universal_guidelines": [
+    "Do NOT use gradients for buttons or backgrounds. Use flat colors or textures.",
+    "Always add 'data-testid' to interactive elements.",
+    "Use 'Lucide React' for icons.",
+    "Ensure 2-3x padding in Marketing sections compared to Dashboard.",
+    "Mobile images max-h-[80vh].",
+    "Use 'sonner' for toasts.",
+    "Customize Shadcn components to remove 'default Vercel look'. Add sharp corners or thicker borders."
+  ],
+  "instructions_to_main_agent": "Implement the 'Architectural Brutalist' look. Focus on typography (Clash Display) and layout (Bento). Don't just stack centered sections. Use the provided image URLs. Ensure the 'Lead Request Form' feels like a professional project brief, not a generic contact form."
+}
