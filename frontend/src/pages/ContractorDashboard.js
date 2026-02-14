@@ -387,6 +387,54 @@ export default function ContractorDashboard() {
               </div>
             </div>
           </TabsContent>
+
+          <TabsContent value="notifications">
+            <div className="space-y-3">
+              {notifications.length > 0 && (
+                <div className="flex justify-end mb-2">
+                  <Button
+                    data-testid="mark-all-read-btn"
+                    variant="outline"
+                    size="sm"
+                    onClick={markAllRead}
+                    className="rounded-sm text-[10px] tracking-widest uppercase"
+                  >
+                    <CheckCircle className="w-3 h-3 mr-1" /> MARK ALL READ
+                  </Button>
+                </div>
+              )}
+              {notifications.length === 0 ? (
+                <div className="bg-card border border-dashed border-border rounded-sm p-12 text-center">
+                  <Bell className="w-10 h-10 text-muted-foreground/20 mx-auto mb-4" />
+                  <h3 className="text-lg font-bold mb-2" style={{ fontFamily: "'Clash Display', sans-serif" }}>No Notifications</h3>
+                  <p className="text-sm text-muted-foreground">You'll receive notifications when new leads arrive or posts are published.</p>
+                </div>
+              ) : (
+                notifications.map((notif, i) => (
+                  <div
+                    key={notif.id}
+                    data-testid={`notification-${i}`}
+                    onClick={() => markNotifRead(notif.id)}
+                    className={`bg-card border rounded-sm p-4 cursor-pointer transition-colors ${
+                      notif.read ? "border-border opacity-60" : "border-primary/30 hover:border-primary/50"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${notif.read ? "bg-muted-foreground/30" : "bg-primary"}`} />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-semibold">{notif.title}</span>
+                          <Badge variant="outline" className="text-[9px] tracking-wider uppercase rounded-sm">{notif.type?.replace(/_/g, " ")}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{notif.message}</p>
+                        <span className="mono-label text-[9px] mt-1 block">{new Date(notif.created_at).toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </TabsContent>
         </Tabs>
       </div>
     </div>
