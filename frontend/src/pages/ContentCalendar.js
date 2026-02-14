@@ -245,6 +245,18 @@ export default function ContentCalendar() {
                 <div className="mono-label text-[9px] mb-4">
                   {selectedPost.scheduled_date} at {selectedPost.scheduled_time}
                 </div>
+                {selectedPost.status === "scheduled" && !connectedPlatforms[selectedPost.platform] && (
+                  <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded-sm flex items-center gap-2 text-xs text-yellow-700">
+                    <Link2 className="w-3 h-3 flex-shrink-0" />
+                    <span>{selectedPost.platform} not connected. <button onClick={() => navigate("/social")} className="underline font-semibold">Connect now</button></span>
+                  </div>
+                )}
+                {selectedPost.status === "scheduled" && connectedPlatforms[selectedPost.platform] && (
+                  <div className="mb-3 p-2 bg-green-50 border border-green-200 rounded-sm flex items-center gap-2 text-xs text-green-700">
+                    <Link2 className="w-3 h-3 flex-shrink-0" />
+                    <span>Will auto-post to @{connectedPlatforms[selectedPost.platform]}</span>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   {selectedPost.status === "scheduled" && (
                     <Button
