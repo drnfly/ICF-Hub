@@ -163,35 +163,28 @@ export default function ContractorDashboard() {
         </div>
 
         {/* AI Tools Quick Access */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          <div
-            data-testid="dashboard-content-agent"
-            onClick={() => navigate("/content")}
-            className="bg-card border border-border rounded-sm p-5 cursor-pointer hover:border-primary/30 transition-all hover:scale-[1.01] flex items-center gap-4 group"
-          >
-            <div className="w-12 h-12 bg-primary/10 rounded-sm flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-              <Sparkles className="w-6 h-6 text-primary" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {[
+            { testid: "dashboard-content-agent", icon: Sparkles, title: "AI Content Generator", desc: "Create SEO social media posts", to: "/content" },
+            { testid: "dashboard-campaign-agent", icon: Zap, title: "AI Campaign Manager", desc: "Multi-platform marketing campaigns", to: "/campaigns" },
+            { testid: "dashboard-calendar-link", icon: Calendar, title: "Content Calendar", desc: "Schedule and publish posts", to: "/calendar" },
+            { testid: "dashboard-analytics-link", icon: BarChart3, title: "Analytics Dashboard", desc: "Track leads and performance", to: "/analytics" },
+          ].map((tool) => (
+            <div
+              key={tool.testid}
+              data-testid={tool.testid}
+              onClick={() => navigate(tool.to)}
+              className="bg-card border border-border rounded-sm p-4 cursor-pointer hover:border-primary/30 transition-all hover:scale-[1.01] flex items-center gap-3 group"
+            >
+              <div className="w-10 h-10 bg-primary/10 rounded-sm flex items-center justify-center group-hover:bg-primary/20 transition-colors flex-shrink-0">
+                <tool.icon className="w-5 h-5 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-xs font-bold truncate" style={{ fontFamily: "'Clash Display', sans-serif" }}>{tool.title}</h3>
+                <p className="text-[10px] text-muted-foreground truncate">{tool.desc}</p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-sm font-bold" style={{ fontFamily: "'Clash Display', sans-serif" }}>AI Content Generator</h3>
-              <p className="text-xs text-muted-foreground">Create SEO social media posts for all platforms</p>
-            </div>
-            <ArrowRight className="w-4 h-4 text-muted-foreground ml-auto" />
-          </div>
-          <div
-            data-testid="dashboard-campaign-agent"
-            onClick={() => navigate("/campaigns")}
-            className="bg-card border border-border rounded-sm p-5 cursor-pointer hover:border-primary/30 transition-all hover:scale-[1.01] flex items-center gap-4 group"
-          >
-            <div className="w-12 h-12 bg-primary/10 rounded-sm flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-              <Zap className="w-6 h-6 text-primary" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold" style={{ fontFamily: "'Clash Display', sans-serif" }}>AI Campaign Manager</h3>
-              <p className="text-xs text-muted-foreground">Create multi-platform marketing campaigns</p>
-            </div>
-            <ArrowRight className="w-4 h-4 text-muted-foreground ml-auto" />
-          </div>
+          ))}
         </div>
 
         <Tabs defaultValue="leads" className="space-y-6">
