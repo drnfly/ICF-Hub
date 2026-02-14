@@ -242,9 +242,14 @@ export default function ContentGenerator() {
                               <Icon className="w-4 h-4 text-primary" />
                               <span className="mono-label">POST {i + 1}</span>
                             </div>
-                            <button onClick={() => copyText(item.text || item)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-muted rounded-sm">
-                              <Copy className="w-4 h-4 text-muted-foreground" />
-                            </button>
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => schedulePost(item, currentResult.platform)} className="p-1 hover:bg-muted rounded-sm" title="Schedule post">
+                                <Calendar className="w-4 h-4 text-primary" />
+                              </button>
+                              <button onClick={() => copyText(item.text || item)} className="p-1 hover:bg-muted rounded-sm" title="Copy">
+                                <Copy className="w-4 h-4 text-muted-foreground" />
+                              </button>
+                            </div>
                           </div>
                           <p className="text-sm leading-relaxed mb-3 whitespace-pre-wrap">{item.text || (typeof item === "string" ? item : JSON.stringify(item))}</p>
                           {item.hashtags?.length > 0 && (
