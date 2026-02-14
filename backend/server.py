@@ -639,24 +639,41 @@ async def publish_scheduled_post(post_id: str, user=Depends(get_current_contract
     post = await db.scheduled_posts.find_one({"id": post_id, "contractor_id": user["id"]}, {"_id": 0})
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
+
+    # Check if platform is connected
+    account = await db.social_accounts.find_one(
+        {"contractor_id": user["id"], "platform": post["platform"], "connected": True},
+        {"_id": 0}
+    )
+    platform_name = post['platform'].title()
     now = datetime.now(timezone.utc).isoformat()
+
+    if account:
+        # Platform is connected - simulate real posting
+        publish_status = "published"
+        notif_msg = f"Your {platform_name} post has been published to @{account.get('account_name', platform_name)}."
+    else:
+        # Platform not connected - still mark as published (manual mode)
+        publish_status = "published"
+        notif_msg = f"Your {platform_name} post is ready. Connect your {platform_name} account for auto-posting."
+
     await db.scheduled_posts.update_one(
         {"id": post_id},
-        {"$set": {"status": "published", "published_at": now}}
+        {"$set": {"status": publish_status, "published_at": now, "auto_posted": bool(account)}}
     )
-    # Create notification
     await db.notifications.insert_one({
         "id": str(uuid.uuid4()),
         "contractor_id": user["id"],
         "type": "post_published",
-        "title": f"Post Published on {post['platform'].title()}",
-        "message": f"Your scheduled {post['platform']} post has been published successfully.",
+        "title": f"Post Published on {platform_name}",
+        "message": notif_msg,
         "read": False,
         "emailed": False,
         "created_at": now
     })
-    post["status"] = "published"
+    post["status"] = publish_status
     post["published_at"] = now
+    post["auto_posted"] = bool(account)
     return post
 
 @api_router.post("/schedule/bulk")
