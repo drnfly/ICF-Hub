@@ -98,6 +98,22 @@ class CampaignContentRequest(BaseModel):
 class LeadScoreRequest(BaseModel):
     lead_id: str
 
+class SchedulePostCreate(BaseModel):
+    platform: str
+    content: str
+    hashtags: List[str] = []
+    cta: str = ""
+    scheduled_date: str
+    scheduled_time: str = "10:00"
+    campaign_id: Optional[str] = None
+    content_type: str = "educational"
+
+class SchedulePostUpdate(BaseModel):
+    content: Optional[str] = None
+    scheduled_date: Optional[str] = None
+    scheduled_time: Optional[str] = None
+    status: Optional[str] = None
+
 # ─── Auth Helper ───
 
 def create_token(contractor_id: str, email: str):
