@@ -114,6 +114,15 @@ class SchedulePostUpdate(BaseModel):
     scheduled_time: Optional[str] = None
     status: Optional[str] = None
 
+class SocialAccountConnect(BaseModel):
+    platform: str
+    account_name: str = ""
+    access_token: str = ""
+    page_id: str = ""
+
+class SocialAccountDisconnect(BaseModel):
+    platform: str
+
 # ─── Auth Helper ───
 
 def create_token(contractor_id: str, email: str):
