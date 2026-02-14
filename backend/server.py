@@ -77,6 +77,27 @@ class ContactCreate(BaseModel):
     email: str
     message: str
 
+class ContentGenerateRequest(BaseModel):
+    platform: str  # facebook, instagram, linkedin, x, tiktok
+    content_type: str  # promotional, educational, testimonial, behind_the_scenes, tip
+    topic: str = ""
+    tone: str = "professional"  # professional, casual, energetic, authoritative
+    count: int = 3
+
+class CampaignCreate(BaseModel):
+    name: str
+    goal: str  # awareness, leads, engagement, traffic
+    platforms: List[str]
+    target_audience: str
+    duration_days: int = 30
+    description: str = ""
+
+class CampaignContentRequest(BaseModel):
+    campaign_id: str
+
+class LeadScoreRequest(BaseModel):
+    lead_id: str
+
 # ─── Auth Helper ───
 
 def create_token(contractor_id: str, email: str):
