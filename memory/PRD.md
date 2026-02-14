@@ -34,6 +34,11 @@ User with 10 years ICF construction experience wants a platform to generate reve
 - Pricing page with 3 tiers (Starter, Pro, Enterprise)
 - Responsive navbar and footer
 - Contact form API
+- **AI Content Generator Agent** — creates SEO-optimized social media posts for Facebook, Instagram, LinkedIn, X, TikTok with hashtags, CTAs, SEO keywords
+- **AI Campaign Manager Agent** — creates multi-platform marketing campaigns with AI-generated content calendars, strategy, and projected metrics
+- **AI Lead Scoring Agent** — scores leads with grade (A-D), urgency level, estimated value, insights, recommended actions, and suggested follow-up messages
+- Dashboard quick-access cards to AI tools
+- Navbar dynamically shows AI tools for logged-in contractors
 
 ## Prioritized Backlog
 ### P0
