@@ -38,6 +38,9 @@ export default function ContentCalendar() {
   useEffect(() => {
     if (!token) { navigate("/auth"); return; }
     fetchPosts();
+    axios.get(`${API}/social-accounts/status`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).then(r => setConnectedPlatforms(r.data)).catch(() => {});
   }, [token, navigate]);
 
   const fetchPosts = async () => {
