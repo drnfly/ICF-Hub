@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import {
   ChevronLeft, ChevronRight, Plus, Clock, Trash2, Send, Loader2,
-  Facebook, Linkedin, Twitter, Instagram, Video, Eye
+  Facebook, Linkedin, Twitter, Instagram, Video, Eye, Link2
 } from "lucide-react";
 import axios from "axios";
 
