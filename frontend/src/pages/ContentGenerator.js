@@ -98,6 +98,26 @@ export default function ContentGenerator() {
     toast.success("Copied to clipboard!");
   };
 
+  const schedulePost = async (item, platform) => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dateStr = tomorrow.toISOString().slice(0, 10);
+    try {
+      await axios.post(`${API}/schedule`, {
+        platform: platform,
+        content: item.text || (typeof item === "string" ? item : JSON.stringify(item)),
+        hashtags: item.hashtags || [],
+        cta: item.cta || "",
+        scheduled_date: dateStr,
+        scheduled_time: "10:00",
+        content_type: form.content_type
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success("Scheduled for tomorrow! View in Calendar.");
+    } catch {
+      toast.error("Failed to schedule post");
+    }
+  };
+
   const getPlatformIcon = (platform) => {
     const p = PLATFORMS.find(pl => pl.value === platform);
     return p ? p.icon : Sparkles;
