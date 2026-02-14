@@ -22,8 +22,8 @@ export default function Navbar() {
     { to: "/dashboard", label: "DASHBOARD" },
     { to: "/content", label: "AI CONTENT" },
     { to: "/campaigns", label: "CAMPAIGNS" },
-    { to: "/contractors", label: "DIRECTORY" },
-    { to: "/get-quote", label: "GET QUOTE" },
+    { to: "/calendar", label: "CALENDAR" },
+    { to: "/analytics", label: "ANALYTICS" },
   ] : [
     { to: "/about-icf", label: "WHY ICF" },
     { to: "/contractors", label: "CONTRACTORS" },

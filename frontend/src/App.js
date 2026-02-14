@@ -13,6 +13,8 @@ import ContractorDashboard from "@/pages/ContractorDashboard";
 import PricingPage from "@/pages/PricingPage";
 import ContentGenerator from "@/pages/ContentGenerator";
 import CampaignManager from "@/pages/CampaignManager";
+import ContentCalendar from "@/pages/ContentCalendar";
+import AnalyticsDashboard from "@/pages/AnalyticsDashboard";
 
 function App() {
   return (
@@ -30,6 +32,8 @@ function App() {
             <Route path="/pricing" element={<PricingPage />} />
             <Route path="/content" element={<ContentGenerator />} />
             <Route path="/campaigns" element={<CampaignManager />} />
+            <Route path="/calendar" element={<ContentCalendar />} />
+            <Route path="/analytics" element={<AnalyticsDashboard />} />
           </Routes>
         </main>
         <Footer />
