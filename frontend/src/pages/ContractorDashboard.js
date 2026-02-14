@@ -29,16 +29,37 @@ export default function ContractorDashboard() {
     const headers = { Authorization: `Bearer ${token}` };
     Promise.all([
       axios.get(`${API}/contractors/me/profile`, { headers }),
-      axios.get(`${API}/leads`, { headers })
-    ]).then(([profileRes, leadsRes]) => {
+      axios.get(`${API}/leads`, { headers }),
+      axios.get(`${API}/notifications`, { headers })
+    ]).then(([profileRes, leadsRes, notifRes]) => {
       setContractor(profileRes.data);
       setProfileForm(profileRes.data);
       setLeads(leadsRes.data);
+      setNotifications(notifRes.data);
     }).catch(() => {
       localStorage.removeItem("icf_token");
       navigate("/auth");
     }).finally(() => setLoading(false));
   }, [token, navigate]);
+
+  const markNotifRead = async (id) => {
+    try {
+      await axios.put(`${API}/notifications/${id}/read`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    } catch {}
+  };
+
+  const markAllRead = async () => {
+    try {
+      await axios.put(`${API}/notifications/read-all`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      toast.success("All notifications marked as read");
+    } catch {}
+  };
 
   const updateProfile = async () => {
     setSaving(true);
