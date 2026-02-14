@@ -27,38 +27,35 @@ User with 10 years ICF construction experience wants a platform to generate reve
 - Full landing page with hero, stats bar, benefits bento grid, how it works, testimonials, CTA
 - About ICF education page with comparison table, FAQ, images
 - Contractor registration and login (JWT auth)
-- Contractor dashboard with leads management and profile editing
+- Contractor dashboard with leads management, profile editing, notifications
 - Contractor directory with search
 - Lead capture form (Get Quote) with project brief fields
 - AI chat widget (GPT-5.2 powered) on all pages
 - Pricing page with 3 tiers (Starter, Pro, Enterprise)
-- Responsive navbar and footer
+- Responsive navbar with notification bell and footer
 - Contact form API
-- **AI Content Generator Agent** — creates SEO-optimized social media posts for Facebook, Instagram, LinkedIn, X, TikTok with hashtags, CTAs, SEO keywords
-- **AI Campaign Manager Agent** — creates multi-platform marketing campaigns with AI-generated content calendars, strategy, and projected metrics
-- **AI Lead Scoring Agent** — scores leads with grade (A-D), urgency level, estimated value, insights, recommended actions, and suggested follow-up messages
-- Dashboard quick-access cards to AI tools
-- Navbar dynamically shows AI tools for logged-in contractors
+- **AI Content Generator Agent** — creates SEO-optimized social media posts for Facebook, Instagram, LinkedIn, X, TikTok
+- **AI Campaign Manager Agent** — creates multi-platform marketing campaigns with AI content calendars
+- **AI Lead Scoring Agent** — scores leads with grade, urgency, estimated value, recommended actions
+- **Content Calendar** — Monthly visual calendar view to schedule, manage, and publish social media posts
+- **Auto-Scheduling** — Schedule individual or bulk posts from content generator, publish from calendar
+- **Analytics Dashboard** — Real-time charts: lead pipeline, leads over time, content by platform, campaign status, scheduled post stats (recharts)
+- **Notification System** — In-app notifications triggered on new leads and post publishing, with unread count badge, mark read/all read
 
 ## Prioritized Backlog
 ### P0
 - Stripe payment integration for contractor subscriptions
-- Email notifications when new leads arrive
+- Connect to real social media APIs (Facebook Graph, LinkedIn, X) for actual auto-posting
+- Real email notifications via SendGrid/Resend (currently in-app only)
 
 ### P1
 - Contractor portfolio/gallery feature
-- Lead assignment logic (match leads to contractors by location)
+- Lead-to-contractor matching algorithm by location
 - Admin dashboard for platform management
+- Blog/CMS for SEO content
 
 ### P2
-- Blog/content management for SEO
 - Contractor reviews and ratings
 - SMS notifications via Twilio
-- Advanced analytics for contractors
-
-## Next Tasks
-1. Integrate Stripe for subscription payments
-2. Add email notification system (SendGrid/Resend)
-3. Implement lead-to-contractor matching algorithm
-4. Add contractor rating/review system
-5. Build admin panel for platform management
+- A/B testing for social media content
+- White-label options for contractors
