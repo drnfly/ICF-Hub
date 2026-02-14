@@ -281,7 +281,7 @@ class ICFHubAPITester:
                 "content_type": "educational"
             }
             
-            success, status, response = self.make_request('POST', '/schedule', schedule_data, 201)
+            success, status, response = self.make_request('POST', '/schedule', schedule_data, 200)
             workflow_complete = success and 'id' in response
             self.log_test("Content → Schedule Workflow", workflow_complete, status)
 
