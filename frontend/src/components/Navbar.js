@@ -78,13 +78,27 @@ export default function Navbar() {
 
           <div className="hidden md:flex items-center gap-3">
             {token ? (
-              <Button
-                data-testid="nav-dashboard-btn"
-                onClick={() => navigate("/dashboard")}
-                className="rounded-sm text-xs tracking-widest font-bold uppercase px-5 py-2 hard-shadow"
-              >
-                DASHBOARD
-              </Button>
+              <>
+                <button
+                  data-testid="nav-notifications-btn"
+                  onClick={() => navigate("/dashboard")}
+                  className="relative p-2 hover:bg-muted rounded-sm transition-colors"
+                >
+                  <Bell className="w-4 h-4" />
+                  {unread > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-primary text-primary-foreground text-[9px] font-bold rounded-full flex items-center justify-center">
+                      {unread > 9 ? "9+" : unread}
+                    </span>
+                  )}
+                </button>
+                <Button
+                  data-testid="nav-dashboard-btn"
+                  onClick={() => navigate("/dashboard")}
+                  className="rounded-sm text-xs tracking-widest font-bold uppercase px-5 py-2 hard-shadow"
+                >
+                  DASHBOARD
+                </Button>
+              </>
             ) : (
               <>
                 <Button
