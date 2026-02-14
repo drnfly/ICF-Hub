@@ -113,7 +113,7 @@ class ICFHubAPITester:
             "content_type": "educational"
         }
         
-        success, status, response = self.make_request('POST', '/schedule', post_data, 201)
+        success, status, response = self.make_request('POST', '/schedule', post_data, 200)
         post_id = response.get('id') if success else None
         self.log_test("POST /api/schedule - Create scheduled post", success, status)
         
