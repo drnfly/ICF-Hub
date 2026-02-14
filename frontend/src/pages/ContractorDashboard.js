@@ -187,7 +187,7 @@ export default function ContractorDashboard() {
                         </div>
                         {lead.description && <p className="text-sm text-muted-foreground">{lead.description}</p>}
                       </div>
-                      <div className="flex-shrink-0">
+                      <div className="flex-shrink-0 flex flex-col gap-2">
                         <Select value={lead.status} onValueChange={v => updateLeadStatus(lead.id, v)}>
                           <SelectTrigger data-testid={`lead-status-select-${i}`} className="w-36 rounded-sm text-xs">
                             <SelectValue />
@@ -199,8 +199,57 @@ export default function ContractorDashboard() {
                             <SelectItem value="closed">Closed</SelectItem>
                           </SelectContent>
                         </Select>
+                        <Button
+                          data-testid={`lead-score-btn-${i}`}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => scoreLead(lead.id)}
+                          disabled={scoringLead === lead.id}
+                          className="rounded-sm text-xs tracking-widest uppercase w-36"
+                        >
+                          {scoringLead === lead.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Sparkles className="w-3 h-3 mr-1" />}
+                          AI SCORE
+                        </Button>
                       </div>
                     </div>
+                    {lead.ai_score && (
+                      <div className="mt-4 p-4 bg-muted/30 border border-dashed border-border rounded-sm">
+                        <div className="flex items-center gap-4 mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="mono-label text-[9px]">SCORE</span>
+                            <span className={`stat-value text-xl ${lead.ai_score.score >= 70 ? 'text-green-600' : lead.ai_score.score >= 40 ? 'text-yellow-600' : 'text-red-500'}`}>
+                              {lead.ai_score.score}
+                            </span>
+                          </div>
+                          <Badge className={`text-[10px] tracking-wider uppercase rounded-sm ${
+                            lead.ai_score.grade === 'A' ? 'bg-green-100 text-green-700' :
+                            lead.ai_score.grade === 'B' ? 'bg-blue-100 text-blue-700' :
+                            lead.ai_score.grade === 'C' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            GRADE {lead.ai_score.grade}
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px] tracking-wider uppercase rounded-sm">
+                            {lead.ai_score.urgency} urgency
+                          </Badge>
+                          {lead.ai_score.estimated_value && (
+                            <span className="text-xs font-semibold text-primary">{lead.ai_score.estimated_value}</span>
+                          )}
+                        </div>
+                        {lead.ai_score.insights && <p className="text-xs text-muted-foreground mb-2">{lead.ai_score.insights}</p>}
+                        {lead.ai_score.recommended_action && (
+                          <div className="flex items-start gap-2 mb-2">
+                            <ArrowRight className="w-3 h-3 text-primary mt-0.5 flex-shrink-0" />
+                            <p className="text-xs font-medium">{lead.ai_score.recommended_action}</p>
+                          </div>
+                        )}
+                        {lead.ai_score.follow_up_message && (
+                          <div className="mt-2 p-3 bg-card border border-border rounded-sm">
+                            <span className="mono-label text-[9px] block mb-1">SUGGESTED FOLLOW-UP</span>
+                            <p className="text-xs text-foreground/80 italic">"{lead.ai_score.follow_up_message}"</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
