@@ -428,11 +428,14 @@ class ICFHubAPITester:
             print("❌ Authentication failed - stopping tests")
             return False
         
-        # Core feature tests
+        # Core social media features tests
+        self.test_social_accounts_endpoints()
+        self.test_content_calendar_integration()
+        self.test_notifications_for_connections()
+        
+        # Keep basic schedule and analytics tests for integration
         self.test_schedule_endpoints()
-        self.test_notifications_endpoints()
         self.test_analytics_endpoint()
-        self.test_integration_workflow()
         
         # Print summary
         print("\n" + "=" * 60)
