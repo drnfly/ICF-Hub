@@ -352,13 +352,27 @@ def main():
     tester.test_get_leads()
     tester.test_contractor_profile()
     
-    # Advanced features
-    print("\n🤖 TESTING AI FEATURES")
+    # Advanced features - Original AI Chat
+    print("\n🤖 TESTING AI CHAT FEATURES")
     tester.test_chat_functionality()
     
     # Contact form
     print("\n📞 TESTING CONTACT FEATURES")
     tester.test_contact_submission()
+    
+    # NEW AI AGENT FEATURES
+    print("\n✨ TESTING NEW AI AGENT FEATURES")
+    print("   Testing AI Content Generator...")
+    tester.test_content_generator()
+    tester.test_get_content_history()
+    
+    print("   Testing AI Campaign Manager...")
+    tester.test_create_campaign()
+    tester.test_get_campaigns()
+    tester.test_generate_campaign_content()
+    
+    print("   Testing AI Lead Scoring...")
+    tester.test_lead_scoring()
     
     # Print summary
     print("\n" + "=" * 50)
