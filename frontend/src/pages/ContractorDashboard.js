@@ -140,6 +140,38 @@ export default function ContractorDashboard() {
           ))}
         </div>
 
+        {/* AI Tools Quick Access */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          <div
+            data-testid="dashboard-content-agent"
+            onClick={() => navigate("/content")}
+            className="bg-card border border-border rounded-sm p-5 cursor-pointer hover:border-primary/30 transition-all hover:scale-[1.01] flex items-center gap-4 group"
+          >
+            <div className="w-12 h-12 bg-primary/10 rounded-sm flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+              <Sparkles className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold" style={{ fontFamily: "'Clash Display', sans-serif" }}>AI Content Generator</h3>
+              <p className="text-xs text-muted-foreground">Create SEO social media posts for all platforms</p>
+            </div>
+            <ArrowRight className="w-4 h-4 text-muted-foreground ml-auto" />
+          </div>
+          <div
+            data-testid="dashboard-campaign-agent"
+            onClick={() => navigate("/campaigns")}
+            className="bg-card border border-border rounded-sm p-5 cursor-pointer hover:border-primary/30 transition-all hover:scale-[1.01] flex items-center gap-4 group"
+          >
+            <div className="w-12 h-12 bg-primary/10 rounded-sm flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+              <Zap className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold" style={{ fontFamily: "'Clash Display', sans-serif" }}>AI Campaign Manager</h3>
+              <p className="text-xs text-muted-foreground">Create multi-platform marketing campaigns</p>
+            </div>
+            <ArrowRight className="w-4 h-4 text-muted-foreground ml-auto" />
+          </div>
+        </div>
+
         <Tabs defaultValue="leads" className="space-y-6">
           <TabsList className="bg-muted rounded-sm">
             <TabsTrigger data-testid="dashboard-leads-tab" value="leads" className="rounded-sm text-xs tracking-widest font-semibold uppercase">
