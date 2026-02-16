@@ -75,8 +75,8 @@ export default function LandingPage() {
                 <div className="relative">
                   <div className="img-overlay rounded-sm overflow-hidden">
                     <img
-                      src="https://customer-assets.emergentagent.com/job_construct-connect-20/artifacts/jz33d2mk_20251109_030327-COLLAGE.jpg"
-                      alt="ICF construction projects collage"
+                      src="https://customer-assets.emergentagent.com/job_construct-connect-20/artifacts/25deyzyn_hou.jpeg"
+                      alt="Aerial view of ICF home construction"
                       className="w-full h-auto max-h-[70vh] object-cover"
                     />
                   </div>
