@@ -145,6 +145,19 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Showcase Image */}
+      <section className="py-0">
+        <div className="max-w-7xl mx-auto px-6 lg:px-8">
+          <div className="img-overlay rounded-sm overflow-hidden">
+            <img
+              src="https://customer-assets.emergentagent.com/job_construct-connect-20/artifacts/xkewk52l_481463930_122115111320712921_5873153101332231783_n.jpg"
+              alt="Large-scale ICF construction project"
+              className="w-full h-[40vh] object-cover"
+            />
+          </div>
+        </div>
+      </section>
+
       {/* How It Works */}
       <section data-testid="how-it-works-section" className="py-24 bg-card">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
