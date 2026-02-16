@@ -118,6 +118,14 @@ export default function Navbar() {
                   SIGN IN
                 </Button>
                 <Button
+                  data-testid="nav-register-btn"
+                  variant="outline"
+                  onClick={() => navigate("/auth?mode=register")}
+                  className="rounded-sm text-xs tracking-widest font-bold uppercase px-5 py-2"
+                >
+                  REGISTER
+                </Button>
+                <Button
                   data-testid="nav-get-started-btn"
                   onClick={() => navigate("/get-quote")}
                   className="rounded-sm text-xs tracking-widest font-bold uppercase px-5 py-2 hard-shadow"
