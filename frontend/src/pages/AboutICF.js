@@ -50,8 +50,8 @@ export default function AboutICF() {
             <div className="col-span-12 lg:col-span-6">
               <div className="img-overlay rounded-sm overflow-hidden">
                 <img
-                  src="https://customer-assets.emergentagent.com/job_construct-connect-20/artifacts/6326fvrj_474524548_122108954150712921_8583227584055942137_n.jpg"
-                  alt="ICF construction site"
+                  src="https://customer-assets.emergentagent.com/job_construct-connect-20/artifacts/jjavbxab_rcrest.jpeg"
+                  alt="Aerial view of ICF construction project"
                   className="w-full h-auto max-h-[60vh] object-cover"
                 />
               </div>
