@@ -37,7 +37,7 @@ export default function LandingPage() {
             <div className="grid grid-cols-12 gap-8 items-center">
               <div className="col-span-12 lg:col-span-7">
                 <div className="mono-label mb-4 animate-fade-up" style={{ animationDelay: "0.1s" }}>
-                  THE FUTURE OF RESIDENTIAL CONSTRUCTION
+                  THE FUTURE OF CONSTRUCTION
                 </div>
                 <h1
                   className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-[1.05] mb-6 animate-fade-up"
