@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,8 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function ContractorAuth() {
   const navigate = useNavigate();
-  const [isLogin, setIsLogin] = useState(true);
+  const [searchParams] = useSearchParams();
+  const [isLogin, setIsLogin] = useState(searchParams.get("mode") !== "register");
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     company_name: "", email: "", password: "", phone: "", city: "", state: "",
