@@ -50,8 +50,8 @@ export default function AboutICF() {
             <div className="col-span-12 lg:col-span-6">
               <div className="img-overlay rounded-sm overflow-hidden">
                 <img
-                  src="https://images.unsplash.com/photo-1685464196339-46a985b2049b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjd8MHwxfHNlYXJjaHwyfHxidWlsZGluZyUyMGZvdW5kYXRpb24lMjBjb25jcmV0ZXxlbnwwfHx8fDE3NzEwOTg4NzB8MA&ixlib=rb-4.1.0&q=85"
-                  alt="ICF construction process"
+                  src="https://customer-assets.emergentagent.com/job_construct-connect-20/artifacts/6326fvrj_474524548_122108954150712921_8583227584055942137_n.jpg"
+                  alt="ICF construction site"
                   className="w-full h-auto max-h-[60vh] object-cover"
                 />
               </div>
@@ -126,8 +126,8 @@ export default function AboutICF() {
             <div className="col-span-12 lg:col-span-6">
               <div className="img-overlay rounded-sm overflow-hidden">
                 <img
-                  src="https://images.unsplash.com/photo-1758565811176-ccd94357a844?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODh8MHwxfHNlYXJjaHw0fHxtb2Rlcm4lMjBob21lJTIwaW50ZXJpb3IlMjBjb25jcmV0ZXxlbnwwfHx8fDE3NzEwOTg4NzF8MA&ixlib=rb-4.1.0&q=85"
-                  alt="Modern ICF home interior"
+                  src="https://customer-assets.emergentagent.com/job_construct-connect-20/artifacts/yp7ofz7d_476350024_122110893032712921_4718083856567782489_n.jpg"
+                  alt="ICF building construction"
                   className="w-full h-auto max-h-[60vh] object-cover"
                 />
               </div>

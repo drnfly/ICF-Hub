@@ -75,8 +75,8 @@ export default function LandingPage() {
                 <div className="relative">
                   <div className="img-overlay rounded-sm overflow-hidden">
                     <img
-                      src="https://images.unsplash.com/photo-1760478869977-a1b4cf15e929?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBjb25jcmV0ZSUyMGhvdXNlJTIwZXh0ZXJpb3IlMjBhcmNoaXRlY3R1cmV8ZW58MHx8fHwxNzcxMDk4ODU5fDA&ixlib=rb-4.1.0&q=85"
-                      alt="Modern ICF home"
+                      src="https://customer-assets.emergentagent.com/job_construct-connect-20/artifacts/et2szue7_472184034_122096619248712921_1201122158390214180_n.jpg"
+                      alt="ICF construction in progress"
                       className="w-full h-auto max-h-[70vh] object-cover"
                     />
                   </div>
