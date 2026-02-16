@@ -152,7 +152,8 @@ export default function LandingPage() {
             <img
               src="https://customer-assets.emergentagent.com/job_construct-connect-20/artifacts/k3ah9b1d_hou.png"
               alt="Aerial view of ICF home construction"
-              className="w-full h-[40vh] object-cover"
+              className="w-full h-[55vh] object-cover"
+              style={{ objectFit: "cover", objectPosition: "center center", imageRendering: "auto" }}
             />
           </div>
         </div>
