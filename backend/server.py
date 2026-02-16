@@ -286,7 +286,7 @@ async def create_checkout(data: CheckoutRequest, request: Request, user=Depends(
 @api_router.get("/payments/status/{session_id}")
 async def check_payment_status(session_id: str, request: Request, user=Depends(get_current_contractor)):
     global stripe_checkout
-    if notRs:
+    if not stripe_checkout:
         host_url = str(request.base_url)
         webhook_url = f"{host_url}api/webhook/stripe"
         stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
