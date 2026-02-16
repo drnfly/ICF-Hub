@@ -10,7 +10,8 @@ import ContractorDirectory from "@/pages/ContractorDirectory";
 import GetQuote from "@/pages/GetQuote";
 import ContractorAuth from "@/pages/ContractorAuth";
 import ContractorDashboard from "@/pages/ContractorDashboard";
-import PricingPage from "@/pages/PricingPage";
+import Pricing from "@/pages/Pricing";
+import PaymentResult from "@/pages/PaymentResult";
 import ContentGenerator from "@/pages/ContentGenerator";
 import CampaignManager from "@/pages/CampaignManager";
 import ContentCalendar from "@/pages/ContentCalendar";
@@ -30,7 +31,9 @@ function App() {
             <Route path="/get-quote" element={<GetQuote />} />
             <Route path="/auth" element={<ContractorAuth />} />
             <Route path="/dashboard" element={<ContractorDashboard />} />
-            <Route path="/pricing" element={<PricingPage />} />
+            <Route path="/pricing" element={<Pricing />} />
+            <Route path="/payment/success" element={<PaymentResult />} />
+            <Route path="/payment/cancel" element={<PaymentResult />} />
             <Route path="/content" element={<ContentGenerator />} />
             <Route path="/campaigns" element={<CampaignManager />} />
             <Route path="/calendar" element={<ContentCalendar />} />
