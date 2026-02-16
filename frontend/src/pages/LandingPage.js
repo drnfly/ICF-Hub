@@ -75,10 +75,9 @@ export default function LandingPage() {
                 <div className="relative">
                   <div className="img-overlay rounded-sm overflow-hidden">
                     <img
-                      src="https://customer-assets.emergentagent.com/job_construct-connect-20/artifacts/f4zbicjj_grapevine.jpg"
-                      alt="Aerial ICF construction site"
-                      className="w-full h-[70vh] object-cover overflow-hidden rounded-sm"
-                      style={{ objectPosition: "center 55%", clipPath: "inset(28% 5% 25% 5%)", transform: "scale(1.25)" }}
+                      src="https://customer-assets.emergentagent.com/job_construct-connect-20/artifacts/ifyogwc2_logo.jpeg"
+                      alt="ICF foam forms close-up"
+                      className="w-full h-auto max-h-[70vh] object-cover rounded-sm"
                     />
                   </div>
                   <div className="absolute bottom-4 left-4 glass px-4 py-3 rounded-sm">
