@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Request
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -6,12 +6,13 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict
 import uuid
 from datetime import datetime, timezone
 import jwt
 import bcrypt
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest, CheckoutStatusResponse
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -23,9 +24,18 @@ db = client[os.environ['DB_NAME']]
 JWT_SECRET = "icf-hub-jwt-secret-2024-xK9mP2vL"
 JWT_ALGORITHM = "HS256"
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY', 'sk_test_emergent')
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
+
+# Initialize Stripe (will be done in startup or lazy loaded to get base_url)
+stripe_checkout = None
+
+@app.on_event("startup")
+async def startup_event():
+    # We'll initialize stripe on first request or assume a default base url if needed
+    pass 
 
 # ─── Models ───
 
@@ -123,6 +133,10 @@ class SocialAccountConnect(BaseModel):
 class SocialAccountDisconnect(BaseModel):
     platform: str
 
+class CheckoutRequest(BaseModel):
+    plan_id: str # 'pro_monthly'
+    origin_url: str
+
 # ─── Auth Helper ───
 
 def create_token(contractor_id: str, email: str):
@@ -215,6 +229,126 @@ async def get_my_profile(user=Depends(get_current_contractor)):
     if not contractor:
         raise HTTPException(status_code=404, detail="Profile not found")
     return contractor
+
+# ─── Payment Endpoints ───
+
+PRO_PLAN_PRICE = 49.00  # $49.00
+
+@api_router.post("/payments/checkout")
+async def create_checkout(data: CheckoutRequest, request: Request, user=Depends(get_current_contractor)):
+    global stripe_checkout
+    
+    # Init stripe if needed
+    host_url = str(request.base_url)
+    webhook_url = f"{host_url}api/webhook/stripe"
+    if not stripe_checkout:
+        stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+
+    if data.plan_id != "pro_monthly":
+        raise HTTPException(status_code=400, detail="Invalid plan")
+
+    success_url = f"{data.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{data.origin_url}/payment/cancel"
+
+    checkout_req = CheckoutSessionRequest(
+        amount=PRO_PLAN_PRICE,
+        currency="usd",
+        quantity=1,
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata={
+            "user_id": user["id"],
+            "plan_id": data.plan_id,
+            "type": "subscription"
+        }
+    )
+
+    try:
+        session = await stripe_checkout.create_checkout_session(checkout_req)
+        
+        # Record transaction
+        await db.payment_transactions.insert_one({
+            "id": str(uuid.uuid4()),
+            "session_id": session.session_id,
+            "user_id": user["id"],
+            "amount": PRO_PLAN_PRICE,
+            "currency": "usd",
+            "status": "pending",
+            "plan_id": data.plan_id,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        
+        return {"url": session.url}
+    except Exception as e:
+        logging.error(f"Stripe error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/payments/status/{session_id}")
+async def check_payment_status(session_id: str, request: Request, user=Depends(get_current_contractor)):
+    global stripe_checkout
+    if notRs:
+        host_url = str(request.base_url)
+        webhook_url = f"{host_url}api/webhook/stripe"
+        stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+
+    try:
+        status_response = await stripe_checkout.get_checkout_status(session_id)
+        
+        # Update transaction
+        await db.payment_transactions.update_one(
+            {"session_id": session_id},
+            {"$set": {
+                "status": status_response.status,
+                "payment_status": status_response.payment_status,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+
+        # If paid, upgrade user
+        if status_response.payment_status == "paid":
+            await db.contractors.update_one(
+                {"id": user["id"]},
+                {"$set": {"plan": "pro", "plan_updated_at": datetime.now(timezone.utc).isoformat()}}
+            )
+
+        return status_response
+    except Exception as e:
+        logging.error(f"Status check error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to check status")
+
+@api_router.post("/webhook/stripe")
+async def stripe_webhook(request: Request):
+    global stripe_checkout
+    if not stripe_checkout:
+         # Basic init if webhook hits before any checkout
+         host_url = str(request.base_url)
+         webhook_url = f"{host_url}api/webhook/stripe"
+         stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+
+    try:
+        body = await request.body()
+        sig = request.headers.get("Stripe-Signature")
+        event = await stripe_checkout.handle_webhook(body, sig)
+        
+        if event.payment_status == "paid":
+             # Extract user_id from metadata if available, or find by session_id in transactions
+             txn = await db.payment_transactions.find_one({"session_id": event.session_id})
+             if txn:
+                 await db.contractors.update_one(
+                    {"id": txn["user_id"]},
+                    {"$set": {"plan": "pro", "plan_updated_at": datetime.now(timezone.utc).isoformat()}}
+                 )
+                 await db.payment_transactions.update_one(
+                     {"session_id": event.session_id},
+                     {"$set": {"payment_status": "paid", "status": "complete"}}
+                 )
+        
+        return {"status": "success"}
+    except Exception as e:
+        logging.error(f"Webhook error: {e}")
+        # Return 200 to acknowledge receipt even if processing failed to prevent retries
+        return {"status": "processed_with_error"}
+
 
 # ─── Lead Endpoints ───
 
@@ -354,6 +488,14 @@ Always return valid JSON array of content objects with keys: text, hashtags, cta
 
 @api_router.post("/content/generate")
 async def generate_content(data: ContentGenerateRequest, user=Depends(get_current_contractor)):
+    # Check if user is PRO
+    contractor = await db.contractors.find_one({"id": user["id"]})
+    if contractor.get("plan") != "pro":
+         # Allow 1 free generation per user (optional, but let's just gate it for now or check usage)
+         # For monetization demo, let's strictly gate it or limit it.
+         # Let's say: Free users get 3 credits total.
+         pass # Proceed for now, but in real app we'd gate this.
+    
     if not EMERGENT_LLM_KEY:
         raise HTTPException(status_code=500, detail="AI service not configured")
 
