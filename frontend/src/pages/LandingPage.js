@@ -78,7 +78,7 @@ export default function LandingPage() {
                       src="https://customer-assets.emergentagent.com/job_construct-connect-20/artifacts/f4zbicjj_grapevine.jpg"
                       alt="Aerial ICF construction site"
                       className="w-full h-[70vh] object-cover overflow-hidden rounded-sm"
-                      style={{ objectPosition: "center 55%", clipPath: "inset(22% 0 22% 0)", transform: "scale(1.1)" }}
+                      style={{ objectPosition: "center 55%", clipPath: "inset(28% 5% 25% 5%)", transform: "scale(1.25)" }}
                     />
                   </div>
                   <div className="absolute bottom-4 left-4 glass px-4 py-3 rounded-sm">
