@@ -94,24 +94,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Stats Bar */}
-      <section data-testid="stats-section" className="bg-secondary text-secondary-foreground py-12">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {[
-              { val: `${stats.projects_completed}+`, label: "PROJECTS COMPLETED" },
-              { val: `${stats.contractors}+`, label: "CERTIFIED CONTRACTORS" },
-              { val: stats.energy_savings, label: "AVG ENERGY SAVINGS" },
-              { val: `${stats.leads}+`, label: "HOMEOWNERS SERVED" },
-            ].map((s, i) => (
-              <div key={i} className="text-center md:text-left">
-                <div className="stat-value text-3xl sm:text-4xl lg:text-5xl text-primary mb-1">{s.val}</div>
-                <div className="mono-label text-secondary-foreground/50">{s.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* Stats Bar Removed */}
 
       {/* Benefits Bento */}
       <section data-testid="benefits-section" className="py-24 blueprint-grid">
