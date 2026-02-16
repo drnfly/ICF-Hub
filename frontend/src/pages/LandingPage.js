@@ -75,9 +75,10 @@ export default function LandingPage() {
                 <div className="relative">
                   <div className="img-overlay rounded-sm overflow-hidden">
                     <img
-                      src="https://customer-assets.emergentagent.com/job_construct-connect-20/artifacts/k3ah9b1d_hou.png"
-                      alt="Aerial view of ICF home construction"
-                      className="w-full h-auto max-h-[70vh] object-cover"
+                      src="https://customer-assets.emergentagent.com/job_construct-connect-20/artifacts/f4zbicjj_grapevine.jpg"
+                      alt="Aerial ICF construction site"
+                      className="w-full h-[70vh] object-cover"
+                      style={{ objectPosition: "center 60%", clipPath: "inset(15% 0 15% 0)" }}
                     />
                   </div>
                   <div className="absolute bottom-4 left-4 glass px-4 py-3 rounded-sm">
@@ -150,8 +151,8 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <div className="img-overlay rounded-sm overflow-hidden">
             <img
-              src="https://customer-assets.emergentagent.com/job_construct-connect-20/artifacts/xkewk52l_481463930_122115111320712921_5873153101332231783_n.jpg"
-              alt="Large-scale ICF construction project"
+              src="https://customer-assets.emergentagent.com/job_construct-connect-20/artifacts/k3ah9b1d_hou.png"
+              alt="Aerial view of ICF home construction"
               className="w-full h-[40vh] object-cover"
             />
           </div>
