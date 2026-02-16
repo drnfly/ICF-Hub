@@ -49,14 +49,14 @@
 ##
 ## test_plan:
 ##   current_focus:
-##     - "Update second image on Why ICF page"
+##     - "Remove Stats Bar from Landing Page"
 ##   stuck_tasks: []
 ##   test_all: false
 ##   test_priority: "sequential"
 ##
 ## agent_communication:
 ##     -agent: "main"
-##     -message: "Updating the second image on the About ICF page with the most likely recent user upload (Asset 2). Will verify with screenshot."
+##     -message: "Removed the Stats Bar section from LandingPage.js as requested. Verifying with screenshot."
 
 # Protocol Guidelines for Main agent
 #
