@@ -1066,3 +1066,21 @@ logger = logging.getLogger(__name__)
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+POST /api/agent/chat
+POST /api/agent/tool
+POST /api/agent/approve
+TELEGRAM_BOT_TOKEN=your_token_here
+TELEGRAM_CHAT_ID=your_chat_id_here
+import os, requests
+from flask import jsonify
+
+@app.route("/api/telegram/test", methods=["POST"])
+def telegram_test():
+token = os.getenv("TELEGRAM_BOT_TOKEN")
+chat_id = os.getenv("TELEGRAM_CHAT_ID")
+if not token or not chat_id:
+return jsonify({"error":"Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID"}), 400
+
+url = f"https://api.telegram.org/bot{token}/sendMessage"
+r = requests.post(url, json={"chat_id": chat_id, "text": "Bot test ✅"})
+return jsonify(r.json()), r.status_code
