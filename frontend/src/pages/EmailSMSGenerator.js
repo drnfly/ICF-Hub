@@ -19,11 +19,11 @@ export default function EmailSMSGenerator() {
   const [connected, setConnected] = useState(false);
   const [sending, setSending] = useState(false);
   const [searchParams] = useSearchParams();
+  const [redirectUriDisplay, setRedirectUriDisplay] = useState("");
   
   const [form, setForm] = useState({
     type: "email",
     recipient_name: "",
-  const [redirectUriDisplay, setRedirectUriDisplay] = useState("");
     recipient_email: "",
     topic: "",
     key_points: "",
