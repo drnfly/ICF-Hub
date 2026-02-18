@@ -19,6 +19,7 @@ from emergentintegrations.payments.stripe.checkout import StripeCheckout, Checko
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
+from routes import content
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
