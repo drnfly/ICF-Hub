@@ -250,22 +250,43 @@ async def login(data: ContractorLogin):
 # ─── HubSpot OAuth ───
 
 @api_router.get("/auth/hubspot/authorize")
-async def hubspot_authorize(user_id: str):
+async def hubspot_authorize(user_id: str, redirect_uri: str = None):
     """Generates the HubSpot OAuth URL"""
-    auth_url = f"https://app.hubspot.com/oauth/authorize?client_id={HUBSPOT_CLIENT_ID}&redirect_uri={HUBSPOT_REDIRECT_URI}&scope={HUBSPOT_SCOPES}&state={user_id}"
+    # Use provided redirect_uri or fallback to env var (legacy behavior)
+    final_redirect_uri = redirect_uri or HUBSPOT_REDIRECT_URI
+    
+    import urllib.parse
+    encoded_redirect = urllib.parse.quote(final_redirect_uri)
+    
+    # Store the intended redirect_uri in the state? 
+    # Or rely on frontend to send the same one to callback?
+    # OAuth spec requires the same redirect_uri in authorize and token exchange.
+    # We will pass it in the STATE parameter encoded, so we can retrieve it in callback!
+    # Format state: "user_id|redirect_uri"
+    
+    state_payload = f"{user_id}|{final_redirect_uri}"
+    import base64
+    encoded_state = base64.urlsafe_b64encode(state_payload.encode()).decode()
+    
+    auth_url = f"https://app.hubspot.com/oauth/authorize?client_id={HUBSPOT_CLIENT_ID}&redirect_uri={encoded_redirect}&scope={HUBSPOT_SCOPES}&state={encoded_state}"
     return {"url": auth_url}
 
 @api_router.get("/auth/hubspot/callback")
 async def hubspot_callback(code: str, state: str):
     """Exchanges code for token"""
     try:
+        # Decode state to get user_id and redirect_uri
+        import base64
+        decoded_state = base64.urlsafe_b64decode(state).decode()
+        user_id, redirect_uri_used = decoded_state.split("|", 1)
+        
         async with httpx.AsyncClient() as client:
-            logger.info(f"Exchanging code for state: {state}")
+            logger.info(f"Exchanging code for user: {user_id} with redirect_uri: {redirect_uri_used}")
             res = await client.post("https://api.hubapi.com/oauth/v3/token", data={
                 "grant_type": "authorization_code",
                 "client_id": HUBSPOT_CLIENT_ID,
                 "client_secret": HUBSPOT_CLIENT_SECRET,
-                "redirect_uri": HUBSPOT_REDIRECT_URI,
+                "redirect_uri": redirect_uri_used,
                 "code": code
             })
             
@@ -275,9 +296,9 @@ async def hubspot_callback(code: str, state: str):
                 
             tokens = res.json()
             
-            # Store tokens for the user (state = user_id)
+            # Store tokens for the user
             await db.integrations.update_one(
-                {"user_id": state, "provider": "hubspot"},
+                {"user_id": user_id, "provider": "hubspot"},
                 {"$set": {
                     "access_token": tokens["access_token"],
                     "refresh_token": tokens["refresh_token"],
@@ -288,10 +309,22 @@ async def hubspot_callback(code: str, state: str):
             )
             
             logger.info("HubSpot connected successfully")
+            
             # Redirect back to frontend
-            return RedirectResponse("http://localhost:3000/tools/communication?connected=true", status_code=302)
+            # We must redirect to the frontend URL that matches the redirect_uri's origin
+            # Extract origin from redirect_uri_used
+            from urllib.parse import urlparse
+            parsed_uri = urlparse(redirect_uri_used)
+            frontend_origin = f"{parsed_uri.scheme}://{parsed_uri.netloc}"
+            
+            # Handle the localhost case where backend is 8001 but frontend is 3000
+            if "localhost:8001" in frontend_origin:
+                 frontend_origin = "http://localhost:3000"
+            
+            return RedirectResponse(f"{frontend_origin}/tools/communication?connected=true", status_code=302)
     except Exception as e:
         logger.error(f"Callback Error: {e}")
+        # Fallback redirect
         return RedirectResponse(f"http://localhost:3000/tools/communication?error=server_error", status_code=302)
 
 @api_router.get("/integrations/hubspot/status")
