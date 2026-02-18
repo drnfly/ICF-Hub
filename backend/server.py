@@ -1,4 +1,5 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Request, UploadFile, File
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -13,6 +14,8 @@ import jwt
 import bcrypt
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest, CheckoutStatusResponse
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -25,9 +28,16 @@ JWT_SECRET = "icf-hub-jwt-secret-2024-xK9mP2vL"
 JWT_ALGORITHM = "HS256"
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY', 'sk_test_emergent')
+SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY')
+ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL') # Optional: The email to notify
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
+
+# Mount Static Files for Uploads
+UPLOAD_DIR = Path("/app/frontend/public/uploads")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # Initialize Stripe (will be done in startup or lazy loaded to get base_url)
 stripe_checkout = None
@@ -157,6 +167,34 @@ async def get_current_contractor(authorization: str = Header(None)):
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+# ─── Email Helper ───
+
+def send_email_notification(subject: str, content: str, attachment_url: str = None):
+    if not SENDGRID_API_KEY or not ADMIN_EMAIL:
+        logger.warning("Email skipped: Missing SENDGRID_API_KEY or ADMIN_EMAIL")
+        return False
+        
+    try:
+        message = Mail(
+            from_email=ADMIN_EMAIL, # Sending to self for now
+            to_emails=ADMIN_EMAIL,
+            subject=subject,
+            html_content=content
+        )
+        
+        # If we had proper attachment handling, we'd fetch the file and attach bytes.
+        # For now, we just include the link in the content.
+        if attachment_url:
+             message.html_content += f"<br><br><strong>Attachment:</strong> <a href='{attachment_url}'>View File</a>"
+
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        response = sg.send(message)
+        logger.info(f"Email sent: {response.status_code}")
+        return True
+    except Exception as e:
+        logger.error(f"Email failed: {e}")
+        return False
 
 # ─── Auth Endpoints ───
 
@@ -413,8 +451,11 @@ Required Info:
 6. Land Status (Do they own the land?)
 7. Plans Status (Do they have blueprints?)
 
+IMPORTANT: If the user says they HAVE PLANS/BLUEPRINTS, immediately say: "Great! Please use the paperclip icon below to upload your plans now."
+Wait for them to upload. When you receive a message starting with "Uploaded file:", confirm receipt and continue or finish.
+
 Tone: Professional, encouraging, helpful.
-When you have ALL 7 pieces of info, your final message MUST start with "COMPLETE:" followed by a summary.
+When you have ALL 7 pieces of info (and plans if applicable), your final message MUST start with "COMPLETE:" followed by a summary.
 Example final message: "COMPLETE: Thanks John! I have your details for a New Home in Austin, TX with a $500k budget starting in 3 months. I'll connect you with our top pros now."
 """
 
@@ -463,9 +504,6 @@ async def intake_chat(data: ChatRequest):
     lead_id = None
     
     if is_complete:
-        # Trigger Extraction (Simulated for speed, normally a separate LLM call)
-        # In a real app, we'd use an LLM to extract JSON from the conversation history.
-        # For now, we will create a 'Pending Review' lead.
         lead_id = str(uuid.uuid4())
         await db.leads.insert_one({
             "id": lead_id,
@@ -480,9 +518,8 @@ async def intake_chat(data: ChatRequest):
         })
         
         # Run Auto-Match Logic
-        # 1. Find contractors (mock logic: pick top 3 pros)
         matches = await db.contractors.find({"plan": "pro"}, {"_id": 0, "id": 1, "company_name": 1, "city": 1, "state": 1}).to_list(3)
-        if not matches: # Fallback to any
+        if not matches:
              matches = await db.contractors.find({}, {"_id": 0, "id": 1, "company_name": 1}).to_list(3)
              
         await db.leads.update_one(
@@ -491,6 +528,30 @@ async def intake_chat(data: ChatRequest):
         )
 
     return {"response": response, "session_id": session_id, "is_complete": is_complete, "lead_id": lead_id}
+
+@api_router.post("/intake/upload")
+async def upload_file(session_id: str = Field(...), file: UploadFile = File(...)):
+    filename = f"{uuid.uuid4().hex}_{file.filename}"
+    filepath = UPLOAD_DIR / filename
+    
+    try:
+        with open(filepath, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+            
+        file_url = f"{os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:8001')}/uploads/{filename}"
+        
+        # Send Email Notification
+        email_sent = send_email_notification(
+            subject=f"New Blueprints Uploaded - Session {session_id[:8]}",
+            content=f"A homeowner uploaded a file in the chat.<br><strong>File:</strong> {file.filename}<br><strong>Session ID:</strong> {session_id}",
+            attachment_url=file_url
+        )
+        
+        return {"url": file_url, "filename": filename, "email_sent": email_sent}
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        raise HTTPException(500, "Upload failed")
 
 @api_router.get("/admin/leads")
 async def get_admin_leads():
