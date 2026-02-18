@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Request, UploadFile, File
+from fastapi import Form
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -530,7 +531,7 @@ async def intake_chat(data: ChatRequest):
     return {"response": response, "session_id": session_id, "is_complete": is_complete, "lead_id": lead_id}
 
 @api_router.post("/intake/upload")
-async def upload_file(session_id: str = Field(...), file: UploadFile = File(...)):
+async def upload_file(session_id: str = Form(...), file: UploadFile = File(...)):
     filename = f"{uuid.uuid4().hex}_{file.filename}"
     filepath = UPLOAD_DIR / filename
     
