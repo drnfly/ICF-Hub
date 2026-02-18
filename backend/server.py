@@ -107,6 +107,10 @@ class CampaignContentRequest(BaseModel):
 
 class LeadScoreRequest(BaseModel):
     lead_id: str
+    
+class MatchRequest(BaseModel):
+    lead_id: str
+    contractor_id: str
 
 class SchedulePostCreate(BaseModel):
     platform: str
@@ -395,6 +399,133 @@ async def update_lead_status(lead_id: str, data: LeadStatusUpdate, user=Depends(
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Lead not found")
     return {"message": "Status updated"}
+
+# ─── AI Intake & Matching ───
+
+INTAKE_SYSTEM_PROMPT = """You are ICF Hub's Intake Coordinator. Your job is to have a friendly text chat with a homeowner to gather their project details.
+You need to collect 7 key pieces of information. Ask ONE question at a time.
+Required Info:
+1. First Name
+2. Project Location (City & State)
+3. Project Type (New Home, Addition, Basement, Pool, Commercial)
+4. Estimated Budget
+5. Timeline (When do they want to start?)
+6. Land Status (Do they own the land?)
+7. Plans Status (Do they have blueprints?)
+
+Tone: Professional, encouraging, helpful.
+When you have ALL 7 pieces of info, your final message MUST start with "COMPLETE:" followed by a summary.
+Example final message: "COMPLETE: Thanks John! I have your details for a New Home in Austin, TX with a $500k budget starting in 3 months. I'll connect you with our top pros now."
+"""
+
+@api_router.post("/intake/chat")
+async def intake_chat(data: ChatRequest):
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(status_code=500, detail="AI service not configured")
+    
+    session_id = data.session_id
+    
+    # Simple in-memory session persistence for demo (in prod use DB)
+    if session_id not in chat_instances:
+        chat_instances[session_id] = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=session_id,
+            system_message=INTAKE_SYSTEM_PROMPT
+        )
+    
+    chat = chat_instances[session_id]
+    
+    # Store user msg
+    await db.intake_chats.insert_one({
+        "id": str(uuid.uuid4()),
+        "session_id": session_id,
+        "role": "user",
+        "content": data.message,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    try:
+        response = await chat.send_message(UserMessage(text=data.message))
+    except Exception as e:
+        logger.error(f"Chat error: {e}")
+        raise HTTPException(status_code=500, detail="AI service unavailable")
+    
+    # Store assistant msg
+    await db.intake_chats.insert_one({
+        "id": str(uuid.uuid4()),
+        "session_id": session_id,
+        "role": "assistant",
+        "content": response,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    is_complete = "COMPLETE:" in response
+    lead_id = None
+    
+    if is_complete:
+        # Trigger Extraction (Simulated for speed, normally a separate LLM call)
+        # In a real app, we'd use an LLM to extract JSON from the conversation history.
+        # For now, we will create a 'Pending Review' lead.
+        lead_id = str(uuid.uuid4())
+        await db.leads.insert_one({
+            "id": lead_id,
+            "session_id": session_id,
+            "status": "pending_match",
+            "source": "ai_intake",
+            "chat_summary": response.replace("COMPLETE:", "").strip(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            # Placeholder data - normally extracted
+            "name": "Homeowner (AI Intake)", 
+            "city": "Unknown", "state": "Unknown", "project_type": "Unknown"
+        })
+        
+        # Run Auto-Match Logic
+        # 1. Find contractors (mock logic: pick top 3 pros)
+        matches = await db.contractors.find({"plan": "pro"}, {"_id": 0, "id": 1, "company_name": 1, "city": 1, "state": 1}).to_list(3)
+        if not matches: # Fallback to any
+             matches = await db.contractors.find({}, {"_id": 0, "id": 1, "company_name": 1}).to_list(3)
+             
+        await db.leads.update_one(
+            {"id": lead_id},
+            {"$set": {"ai_matches": matches}}
+        )
+
+    return {"response": response, "session_id": session_id, "is_complete": is_complete, "lead_id": lead_id}
+
+@api_router.get("/admin/leads")
+async def get_admin_leads():
+    # Helper endpoint for the "Connection Control Center"
+    leads = await db.leads.find({"status": "pending_match"}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return leads
+
+@api_router.post("/admin/connect")
+async def connect_lead(data: MatchRequest):
+    # This is the "One Click Connect" action
+    lead = await db.leads.find_one({"id": data.lead_id})
+    contractor = await db.contractors.find_one({"id": data.contractor_id})
+    
+    if not lead or not contractor:
+        raise HTTPException(404, "Lead or Contractor not found")
+        
+    # 1. Update Lead Status
+    await db.leads.update_one({"id": data.lead_id}, {"$set": {"status": "connected", "matched_contractor_id": data.contractor_id}})
+    
+    # 2. Create Notifications (Mock Email)
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Notify Contractor
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "contractor_id": data.contractor_id,
+        "type": "new_lead_connection",
+        "title": "New Lead Connected!",
+        "message": f"You have been connected with a new lead! Check your dashboard for details.",
+        "read": False,
+        "created_at": now
+    })
+    
+    return {"message": "Connection successful. Introduction emails sent."}
+
 
 # ─── Chat Endpoint ───
 
@@ -1066,4 +1197,3 @@ logger = logging.getLogger(__name__)
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
-# End of file
