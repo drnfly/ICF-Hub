@@ -33,6 +33,8 @@ export default function EmailSMSGenerator() {
     checkConnection();
     if (searchParams.get("connected")) {
       toast.success("HubSpot Connected Successfully!");
+    } else if (searchParams.get("error")) {
+      toast.error("HubSpot Connection Failed: " + searchParams.get("error"));
     }
   }, []);
 
@@ -52,17 +54,54 @@ export default function EmailSMSGenerator() {
   const handleConnect = async () => {
     try {
       const token = localStorage.getItem("icf_token");
-      // Use contractor ID as state (assuming ID is available in storage, else backend decodes token)
-      // Actually backend endpoint takes 'user_id' param for state.
-      // Let's decode token roughly or just use a random string if backend handles it
-      // For simplicity, we pass a dummy user_id, backend will likely use the token in real flow
-      // But the endpoint is public GET. We should pass the user ID.
       const contractor = JSON.parse(localStorage.getItem("icf_contractor") || "{}");
       if (!contractor.id) return toast.error("Please login first");
 
-      const res = await axios.get(`${API}/auth/hubspot/authorize?user_id=${contractor.id}`);
-      window.location.href = res.data.url;
+      // Dynamic Redirect URI based on current browser location
+      // This ensures it works on both localhost AND cloud previews
+      // IMPORTANT: This URL must be added to HubSpot Developer App settings!
+      const currentOrigin = window.location.origin; // e.g., https://myapp.com or http://localhost:3000
+      
+      // Note: In local dev, frontend is 3000, backend is 8001.
+      // But in PROD/Cloud, they are often on the SAME domain, just /api route.
+      // We will tell the backend to use THIS logic as the redirect target.
+      // The backend is proxied at /api usually.
+      // So the callback should be: origin + /api/auth/hubspot/callback
+      
+      // HOWEVER, if we are local (3000), the backend is at 8001. 
+      // If we redirect to 3000/api/..., the react dev server proxies it? Yes, usually setupProxy.js.
+      // If not, we might need to point to 8001 directly.
+      
+      // Let's try pointing to the BACKEND URL directly if we can.
+      // But REACT_APP_BACKEND_URL might be internal (0.0.0.0).
+      
+      // SAFEST BET: Use the window.location.origin + /api/... 
+      // ensuring the cloud ingress handles the routing.
+      // If local, we might need a special check.
+      
+      let redirectUri = `${currentOrigin}/api/auth/hubspot/callback`;
+      if (currentOrigin.includes("localhost:3000")) {
+          // Special case for local dev without proxy setup: point to 8001
+          redirectUri = "http://localhost:8001/api/auth/hubspot/callback";
+      }
+
+      console.log("Using Redirect URI:", redirectUri);
+
+      const res = await axios.get(`${API}/auth/hubspot/authorize`, {
+        params: {
+          user_id: contractor.id,
+          redirect_uri: redirectUri
+        }
+      });
+      
+      // Show instruction toast
+      toast.info("Redirecting to HubSpot...", { duration: 2000 });
+      setTimeout(() => {
+          window.location.href = res.data.url;
+      }, 1000);
+      
     } catch (err) {
+      console.error(err);
       toast.error("Failed to start connection");
     }
   };
@@ -138,23 +177,30 @@ export default function EmailSMSGenerator() {
             <p className="text-muted-foreground">Generate professional emails and texts instantly.</p>
           </div>
           
-          <Button 
-            variant={connected ? "outline" : "default"}
-            className={connected ? "border-green-500/50 bg-green-500/10 text-green-600 hover:bg-green-500/20" : "bg-[#ff7a59] hover:bg-[#ff7a59]/90"}
-            onClick={connected ? null : handleConnect}
-          >
-            {connected ? (
-              <>
-                <Check className="w-4 h-4 mr-2" />
-                HubSpot Connected
-              </>
-            ) : (
-              <>
-                <Cable className="w-4 h-4 mr-2" />
-                Connect HubSpot
-              </>
+          <div className="flex flex-col items-end gap-2">
+            <Button 
+                variant={connected ? "outline" : "default"}
+                className={connected ? "border-green-500/50 bg-green-500/10 text-green-600 hover:bg-green-500/20" : "bg-[#ff7a59] hover:bg-[#ff7a59]/90"}
+                onClick={connected ? null : handleConnect}
+            >
+                {connected ? (
+                <>
+                    <Check className="w-4 h-4 mr-2" />
+                    HubSpot Connected
+                </>
+                ) : (
+                <>
+                    <Cable className="w-4 h-4 mr-2" />
+                    Connect HubSpot
+                </>
+                )}
+            </Button>
+            {!connected && (
+                <div className="text-[10px] text-muted-foreground bg-card px-2 py-1 rounded border border-border">
+                    Required for auto-sending
+                </div>
             )}
-          </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
