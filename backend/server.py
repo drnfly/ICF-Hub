@@ -13,6 +13,7 @@ import uuid
 from datetime import datetime, timezone
 import jwt
 import bcrypt
+from app.backend.routes import content
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest, CheckoutStatusResponse
 from sendgrid import SendGridAPIClient
@@ -28,6 +29,7 @@ db = client[os.environ['DB_NAME']]
 JWT_SECRET = "icf-hub-jwt-secret-2024-xK9mP2vL"
 JWT_ALGORITHM = "HS256"
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+app.include_router(content.router)
 STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY', 'sk_test_emergent')
 SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY')
 ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL') # Optional: The email to notify
