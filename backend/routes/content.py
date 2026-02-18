@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 import os
+from pathlib import Path
 import uuid
 
 router = APIRouter(prefix="/content", tags=["content"])
@@ -33,6 +34,12 @@ Do not include any other text."""
 
 @router.post("/generate-message")
 async def generate_message(data: MessageGenerateRequest):
+    if not EMERGENT_LLM_KEY:
+        # Fallback to env var if not in os.environ (sometimes not loaded in router)
+        from dotenv import load_dotenv
+        load_dotenv(Path(__file__).parent.parent / '.env')
+        EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', 'sk-emergent-33b71A689F68269E53')
+    
     if not EMERGENT_LLM_KEY:
         raise HTTPException(status_code=500, detail="AI service not configured")
 
