@@ -1,6 +1,6 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Request, UploadFile, File
-from fastapi import Form
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Request, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -10,10 +10,10 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import jwt
 import bcrypt
-from app.backend.routes import content
+import httpx
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest, CheckoutStatusResponse
 from sendgrid import SendGridAPIClient
@@ -29,25 +29,28 @@ db = client[os.environ['DB_NAME']]
 JWT_SECRET = "icf-hub-jwt-secret-2024-xK9mP2vL"
 JWT_ALGORITHM = "HS256"
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
-app.include_router(content.router)
 STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY', 'sk_test_emergent')
 SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY')
-ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL') # Optional: The email to notify
+ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL')
+
+# HubSpot Config
+HUBSPOT_CLIENT_ID = os.environ.get("HUBSPOT_CLIENT_ID", "a4e90530-6747-4810-a931-a342bd209f07")
+HUBSPOT_CLIENT_SECRET = os.environ.get("HUBSPOT_CLIENT_SECRET", "160b8440-80d7-49df-9f97-23fbb4f09712")
+HUBSPOT_REDIRECT_URI = os.environ.get("HUBSPOT_REDIRECT_URI", "http://localhost:8001/api/auth/hubspot/callback")
+HUBSPOT_SCOPES = "crm.objects.contacts.read crm.objects.contacts.write crm.schemas.contacts.read crm.lists.read sales-email-read" 
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
-# Mount Static Files for Uploads
+# Mount Static Files
 UPLOAD_DIR = Path("/app/frontend/public/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
-# Initialize Stripe (will be done in startup or lazy loaded to get base_url)
 stripe_checkout = None
 
 @app.on_event("startup")
 async def startup_event():
-    # We'll initialize stripe on first request or assume a default base url if needed
     pass 
 
 # ─── Models ───
@@ -101,15 +104,15 @@ class ContactCreate(BaseModel):
     message: str
 
 class ContentGenerateRequest(BaseModel):
-    platform: str  # facebook, instagram, linkedin, x, tiktok
-    content_type: str  # promotional, educational, testimonial, behind_the_scenes, tip
+    platform: str
+    content_type: str
     topic: str = ""
-    tone: str = "professional"  # professional, casual, energetic, authoritative
+    tone: str = "professional"
     count: int = 3
 
 class CampaignCreate(BaseModel):
     name: str
-    goal: str  # awareness, leads, engagement, traffic
+    goal: str
     platforms: List[str]
     target_audience: str
     duration_days: int = 30
@@ -151,8 +154,20 @@ class SocialAccountDisconnect(BaseModel):
     platform: str
 
 class CheckoutRequest(BaseModel):
-    plan_id: str # 'pro_monthly'
+    plan_id: str
     origin_url: str
+
+class MessageGenerateRequest(BaseModel):
+    recipient_name: str
+    topic: str
+    key_points: List[str] = []
+    tone: str = "professional"
+    type: str = "email"
+
+class HubSpotSendRequest(BaseModel):
+    recipient_email: str
+    subject: Optional[str] = None
+    body: str
 
 # ─── Auth Helper ───
 
@@ -175,25 +190,18 @@ async def get_current_contractor(authorization: str = Header(None)):
 
 def send_email_notification(subject: str, content: str, attachment_url: str = None):
     if not SENDGRID_API_KEY or not ADMIN_EMAIL:
-        logger.warning("Email skipped: Missing SENDGRID_API_KEY or ADMIN_EMAIL")
         return False
-        
     try:
         message = Mail(
-            from_email=ADMIN_EMAIL, # Sending to self for now
+            from_email=ADMIN_EMAIL,
             to_emails=ADMIN_EMAIL,
             subject=subject,
             html_content=content
         )
-        
-        # If we had proper attachment handling, we'd fetch the file and attach bytes.
-        # For now, we just include the link in the content.
         if attachment_url:
              message.html_content += f"<br><br><strong>Attachment:</strong> <a href='{attachment_url}'>View File</a>"
-
         sg = SendGridAPIClient(SENDGRID_API_KEY)
-        response = sg.send(message)
-        logger.info(f"Email sent: {response.status_code}")
+        sg.send(message)
         return True
     except Exception as e:
         logger.error(f"Email failed: {e}")
@@ -237,6 +245,119 @@ async def login(data: ContractorLogin):
     token = create_token(contractor["id"], contractor["email"])
     safe_doc = {k: v for k, v in contractor.items() if k not in ["password", "_id"]}
     return {"token": token, "contractor": safe_doc}
+
+# ─── HubSpot OAuth ───
+
+@api_router.get("/auth/hubspot/authorize")
+async def hubspot_authorize(user_id: str):
+    """Generates the HubSpot OAuth URL"""
+    auth_url = f"https://app.hubspot.com/oauth/authorize?client_id={HUBSPOT_CLIENT_ID}&redirect_uri={HUBSPOT_REDIRECT_URI}&scope={HUBSPOT_SCOPES}&state={user_id}"
+    return {"url": auth_url}
+
+@api_router.get("/auth/hubspot/callback")
+async def hubspot_callback(code: str, state: str):
+    """Exchanges code for token"""
+    async with httpx.AsyncClient() as client:
+        res = await client.post("https://api.hubapi.com/oauth/v3/token", data={
+            "grant_type": "authorization_code",
+            "client_id": HUBSPOT_CLIENT_ID,
+            "client_secret": HUBSPOT_CLIENT_SECRET,
+            "redirect_uri": HUBSPOT_REDIRECT_URI,
+            "code": code
+        })
+        
+        if res.status_code != 200:
+            raise HTTPException(400, f"HubSpot Auth Failed: {res.text}")
+            
+        tokens = res.json()
+        
+        # Store tokens for the user (state = user_id)
+        await db.integrations.update_one(
+            {"user_id": state, "provider": "hubspot"},
+            {"$set": {
+                "access_token": tokens["access_token"],
+                "refresh_token": tokens["refresh_token"],
+                "expires_in": tokens["expires_in"],
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }},
+            upsert=True
+        )
+        
+        # Redirect back to frontend
+        return RedirectResponse("http://localhost:3000/tools/communication?connected=true")
+
+@api_router.get("/integrations/hubspot/status")
+async def hubspot_status(user=Depends(get_current_contractor)):
+    integration = await db.integrations.find_one({"user_id": user["id"], "provider": "hubspot"})
+    return {"connected": bool(integration)}
+
+@api_router.post("/integrations/hubspot/send")
+async def hubspot_send(data: HubSpotSendRequest, user=Depends(get_current_contractor)):
+    """
+    Sends an email via HubSpot (Creates a Contact + Logs Engagement)
+    Note: Real sending via connected inbox requires Transactional Email Add-on or specific API.
+    Here we create a contact and a 'NOTE' engagement as a proxy for sending/logging.
+    """
+    integration = await db.integrations.find_one({"user_id": user["id"], "provider": "hubspot"})
+    if not integration:
+        raise HTTPException(400, "HubSpot not connected")
+        
+    token = integration["access_token"]
+    
+    async with httpx.AsyncClient() as client:
+        # 1. Create/Get Contact
+        contact_res = await client.post(
+            "https://api.hubapi.com/crm/v3/objects/contacts",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"properties": {"email": data.recipient_email}}
+        )
+        
+        contact_id = None
+        if contact_res.status_code == 201:
+            contact_id = contact_res.json()["id"]
+        elif contact_res.status_code == 409: # Already exists
+            # Search for it (simplified, assuming we could parse ID from error or search)
+            # For this MVP, we'll try to search by email
+            search_res = await client.post(
+                "https://api.hubapi.com/crm/v3/objects/contacts/search",
+                headers={"Authorization": f"Bearer {token}"},
+                json={"filterGroups": [{"filters": [{"propertyName": "email", "operator": "EQ", "value": data.recipient_email}]}]}
+            )
+            if search_res.status_code == 200 and search_res.json()["total"] > 0:
+                contact_id = search_res.json()["results"][0]["id"]
+        
+        if not contact_id:
+            raise HTTPException(500, "Could not find or create contact in HubSpot")
+
+        # 2. Log Email (Engagement)
+        # Note: 'EMAILS' engagement type logs it. To actually SEND, we'd need Single Send API.
+        # Given constraints, we will Log it so it appears in the CRM.
+        engagement_res = await client.post(
+            "https://api.hubapi.com/crm/v3/objects/emails",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "properties": {
+                    "hs_timestamp": datetime.now().isoformat(),
+                    "hubspot_owner_id": "", # Auto-assigned
+                    "hs_email_direction": "EMAIL",
+                    "hs_email_status": "SENT",
+                    "hs_email_subject": data.subject,
+                    "hs_email_text": data.body,
+                    "hs_email_to_email": data.recipient_email
+                },
+                "associations": [
+                    {
+                        "to": {"id": contact_id},
+                        "types": [{"associationCategory": "HUBSPOT_DEFINED", "associationTypeId": 198}] # Contact to Email
+                    }
+                ]
+            }
+        )
+        
+        if engagement_res.status_code not in [200, 201]:
+             raise HTTPException(500, f"Failed to log email in HubSpot: {engagement_res.text}")
+             
+        return {"success": True, "message": "Email logged in HubSpot CRM"}
 
 # ─── Contractor Endpoints ───
 
@@ -1246,6 +1367,7 @@ async def health():
     return {"status": "ok"}
 
 app.include_router(api_router)
+app.include_router(content.router)
 
 app.add_middleware(
     CORSMiddleware,
