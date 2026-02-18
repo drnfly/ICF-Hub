@@ -1368,7 +1368,7 @@ async def health():
     return {"status": "ok"}
 
 app.include_router(api_router)
-app.include_router(content.router)
+app.include_router(content.router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,
