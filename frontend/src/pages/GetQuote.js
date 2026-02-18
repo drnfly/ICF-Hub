@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Zap, Loader2, Check } from "lucide-react";
+import { Send, Zap, Loader2, Check, Paperclip, FileText } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { v4 as uuidv4 } from 'uuid';
@@ -14,9 +14,11 @@ export default function GetQuote() {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [sessionId] = useState(uuidv4());
   const [complete, setComplete] = useState(false);
   const bottomRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -48,6 +50,53 @@ export default function GetQuote() {
       toast.error("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFileSelect = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File size must be under 5MB");
+      return;
+    }
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("session_id", sessionId);
+
+    try {
+      const res = await axios.post(`${API}/intake/upload`, formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+
+      const fileUrl = res.data.url;
+      const fileName = file.name;
+      
+      // Simulate user message with file
+      const userMsg = `Uploaded file: ${fileName}`;
+      setMessages(p => [...p, { role: "user", content: userMsg, isFile: true, fileUrl }]);
+      
+      // Send to AI context
+      setLoading(true);
+      const chatRes = await axios.post(`${API}/intake/chat`, {
+        session_id: sessionId,
+        message: `[System: User uploaded file: ${fileUrl}]`
+      });
+      
+      setMessages(p => [...p, { role: "assistant", content: chatRes.data.response }]);
+
+    } catch (err) {
+      console.error(err);
+      toast.error("Upload failed. Please try again.");
+    } finally {
+      setUploading(false);
+      setLoading(false);
+      // Reset input
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -96,38 +145,74 @@ export default function GetQuote() {
                     : "bg-muted text-foreground rounded-tl-none"
                 }`}
               >
-                {m.content.replace("COMPLETE:", "")}
+                {m.isFile ? (
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    <a href={m.fileUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-white/80">
+                      {m.content.replace("Uploaded file: ", "")}
+                    </a>
+                  </div>
+                ) : (
+                  m.content.replace("COMPLETE:", "")
+                )}
               </div>
             </div>
           ))}
-          {loading && (
+          {(loading || uploading) && (
             <div className="flex justify-start">
               <div className="bg-muted p-4 rounded-lg rounded-tl-none flex items-center gap-2">
-                <div className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce" />
-                <div className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce delay-75" />
-                <div className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce delay-150" />
+                {uploading ? (
+                  <span className="text-xs text-muted-foreground">Uploading file...</span>
+                ) : (
+                  <>
+                    <div className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce" />
+                    <div className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce delay-75" />
+                    <div className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce delay-150" />
+                  </>
+                )}
               </div>
             </div>
           )}
           <div ref={bottomRef} />
         </div>
 
-        <form onSubmit={handleSend} className="relative">
+        <form onSubmit={handleSend} className="relative flex gap-2">
           <Input
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            placeholder="Type your answer here..."
-            className="pr-12 py-6 bg-card border-border shadow-sm text-base"
-            autoFocus
+            type="file"
+            ref={fileInputRef}
+            className="hidden"
+            onChange={handleFileSelect}
+            accept=".pdf,.jpg,.jpeg,.png"
           />
           <Button
-            type="submit"
-            disabled={!input.trim() || loading}
+            type="button"
+            variant="outline"
             size="icon"
-            className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-sm"
+            className="h-14 w-14 rounded-sm border-border bg-card hover:bg-muted"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={loading || uploading}
+            title="Upload Plans/Blueprints"
           >
-            <Send className="w-4 h-4" />
+            <Paperclip className="w-5 h-5 text-muted-foreground" />
           </Button>
+          
+          <div className="relative flex-1">
+            <Input
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              placeholder="Type your answer here..."
+              className="pr-12 py-7 bg-card border-border shadow-sm text-base h-14"
+              autoFocus
+            />
+            <Button
+              type="submit"
+              disabled={!input.trim() || loading || uploading}
+              size="icon"
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 rounded-sm"
+            >
+              <Send className="w-4 h-4" />
+            </Button>
+          </div>
         </form>
       </div>
     </div>
