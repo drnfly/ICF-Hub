@@ -23,6 +23,7 @@ export default function EmailSMSGenerator() {
   const [form, setForm] = useState({
     type: "email",
     recipient_name: "",
+  const [redirectUriDisplay, setRedirectUriDisplay] = useState("");
     recipient_email: "",
     topic: "",
     key_points: "",
@@ -30,6 +31,14 @@ export default function EmailSMSGenerator() {
   });
 
   useEffect(() => {
+    // Set initial redirect URI for display
+    const currentOrigin = window.location.origin;
+    let uri = `${currentOrigin}/api/auth/hubspot/callback`;
+    if (currentOrigin.includes("localhost:3000")) {
+        uri = "http://localhost:8001/api/auth/hubspot/callback";
+    }
+    setRedirectUriDisplay(uri);
+
     checkConnection();
     if (searchParams.get("connected")) {
       toast.success("HubSpot Connected Successfully!");
@@ -81,9 +90,11 @@ export default function EmailSMSGenerator() {
       
       let redirectUri = `${currentOrigin}/api/auth/hubspot/callback`;
       if (currentOrigin.includes("localhost:3000")) {
-          // Special case for local dev without proxy setup: point to 8001
           redirectUri = "http://localhost:8001/api/auth/hubspot/callback";
       }
+      
+      // Store for display
+      setRedirectUriDisplay(redirectUri);
 
       console.log("Using Redirect URI:", redirectUri);
 
@@ -196,8 +207,18 @@ export default function EmailSMSGenerator() {
                 )}
             </Button>
             {!connected && (
-                <div className="text-[10px] text-muted-foreground bg-card px-2 py-1 rounded border border-border">
-                    Required for auto-sending
+                <div className="flex flex-col items-end gap-1">
+                    <div className="text-[10px] text-muted-foreground bg-card px-2 py-1 rounded border border-border text-right">
+                        Required for auto-sending
+                    </div>
+                    {redirectUriDisplay && (
+                        <div className="text-[10px] bg-yellow-50 text-yellow-800 p-2 rounded border border-yellow-200 max-w-[300px] break-all">
+                            <strong>Setup Required:</strong> Add this Redirect URL to HubSpot App:<br/>
+                            <span className="font-mono select-all cursor-pointer hover:bg-yellow-100" onClick={() => {navigator.clipboard.writeText(redirectUriDisplay); toast.success("Copied URL!");}}>
+                                {redirectUriDisplay}
+                            </span>
+                        </div>
+                    )}
                 </div>
             )}
           </div>
