@@ -258,34 +258,41 @@ async def hubspot_authorize(user_id: str):
 @api_router.get("/auth/hubspot/callback")
 async def hubspot_callback(code: str, state: str):
     """Exchanges code for token"""
-    async with httpx.AsyncClient() as client:
-        res = await client.post("https://api.hubapi.com/oauth/v3/token", data={
-            "grant_type": "authorization_code",
-            "client_id": HUBSPOT_CLIENT_ID,
-            "client_secret": HUBSPOT_CLIENT_SECRET,
-            "redirect_uri": HUBSPOT_REDIRECT_URI,
-            "code": code
-        })
-        
-        if res.status_code != 200:
-            raise HTTPException(400, f"HubSpot Auth Failed: {res.text}")
+    try:
+        async with httpx.AsyncClient() as client:
+            logger.info(f"Exchanging code for state: {state}")
+            res = await client.post("https://api.hubapi.com/oauth/v3/token", data={
+                "grant_type": "authorization_code",
+                "client_id": HUBSPOT_CLIENT_ID,
+                "client_secret": HUBSPOT_CLIENT_SECRET,
+                "redirect_uri": HUBSPOT_REDIRECT_URI,
+                "code": code
+            })
             
-        tokens = res.json()
-        
-        # Store tokens for the user (state = user_id)
-        await db.integrations.update_one(
-            {"user_id": state, "provider": "hubspot"},
-            {"$set": {
-                "access_token": tokens["access_token"],
-                "refresh_token": tokens["refresh_token"],
-                "expires_in": tokens["expires_in"],
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            }},
-            upsert=True
-        )
-        
-        # Redirect back to frontend
-        return RedirectResponse("http://localhost:3000/tools/communication?connected=true")
+            if res.status_code != 200:
+                logger.error(f"HubSpot Token Exchange Failed: {res.text}")
+                return RedirectResponse(f"http://localhost:3000/tools/communication?error={res.text}", status_code=302)
+                
+            tokens = res.json()
+            
+            # Store tokens for the user (state = user_id)
+            await db.integrations.update_one(
+                {"user_id": state, "provider": "hubspot"},
+                {"$set": {
+                    "access_token": tokens["access_token"],
+                    "refresh_token": tokens["refresh_token"],
+                    "expires_in": tokens["expires_in"],
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }},
+                upsert=True
+            )
+            
+            logger.info("HubSpot connected successfully")
+            # Redirect back to frontend
+            return RedirectResponse("http://localhost:3000/tools/communication?connected=true", status_code=302)
+    except Exception as e:
+        logger.error(f"Callback Error: {e}")
+        return RedirectResponse(f"http://localhost:3000/tools/communication?error=server_error", status_code=302)
 
 @api_router.get("/integrations/hubspot/status")
 async def hubspot_status(user=Depends(get_current_contractor)):
