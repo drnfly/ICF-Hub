@@ -17,12 +17,14 @@ export default function GetQuote() {
   const [uploading, setUploading] = useState(false);
   const [sessionId] = useState(uuidv4());
   const [complete, setComplete] = useState(false);
-  const bottomRef = useRef(null);
+  const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, loading, uploading]);
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -135,11 +137,14 @@ export default function GetQuote() {
           </h1>
         </div>
 
-        <div className="flex-1 bg-card border border-border rounded-sm shadow-sm p-6 mb-4 overflow-y-auto min-h-[500px] flex flex-col gap-4">
+        <div 
+          ref={scrollRef}
+          className="flex-1 bg-card border border-border rounded-lg shadow-sm p-6 mb-4 overflow-y-auto min-h-[500px] flex flex-col gap-4"
+        >
           {messages.map((m, i) => (
             <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
               <div
-                className={`max-w-[80%] p-4 rounded-lg text-sm leading-relaxed ${
+                className={`max-w-[85%] px-5 py-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
                   m.role === "user"
                     ? "bg-primary text-primary-foreground rounded-tr-none"
                     : "bg-muted text-foreground rounded-tl-none"
@@ -160,20 +165,19 @@ export default function GetQuote() {
           ))}
           {(loading || uploading) && (
             <div className="flex justify-start">
-              <div className="bg-muted p-4 rounded-lg rounded-tl-none flex items-center gap-2">
+              <div className="bg-muted px-4 py-3 rounded-2xl rounded-tl-none flex items-center gap-1.5 shadow-sm">
                 {uploading ? (
-                  <span className="text-xs text-muted-foreground">Uploading file...</span>
+                  <span className="text-xs text-muted-foreground animate-pulse">Uploading file...</span>
                 ) : (
                   <>
-                    <div className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce delay-75" />
-                    <div className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce delay-150" />
+                    <div className="w-1.5 h-1.5 bg-foreground/40 rounded-full animate-bounce" />
+                    <div className="w-1.5 h-1.5 bg-foreground/40 rounded-full animate-bounce delay-75" />
+                    <div className="w-1.5 h-1.5 bg-foreground/40 rounded-full animate-bounce delay-150" />
                   </>
                 )}
               </div>
             </div>
           )}
-          <div ref={bottomRef} />
         </div>
 
         <form onSubmit={handleSend} className="relative flex gap-2">
