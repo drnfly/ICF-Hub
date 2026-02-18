@@ -34,6 +34,7 @@ Do not include any other text."""
 
 @router.post("/generate-message")
 async def generate_message(data: MessageGenerateRequest):
+    global EMERGENT_LLM_KEY
     if not EMERGENT_LLM_KEY:
         # Fallback to env var if not in os.environ (sometimes not loaded in router)
         from dotenv import load_dotenv
