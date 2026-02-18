@@ -30,7 +30,7 @@ export default function GetQuote() {
     try {
       await axios.post(`${API}/leads`, form);
       setSubmitted(true);
-      toast.success("Quote request submitted successfully!");
+      toast.success("Project inquiry submitted successfully!");
     } catch {
       toast.error("Something went wrong. Please try again.");
     } finally {
@@ -71,13 +71,13 @@ export default function GetQuote() {
             <div className="col-span-12 lg:col-span-4">
               <span className="mono-label mb-3 block">PROJECT BRIEF</span>
               <h1 className="text-4xl sm:text-5xl font-bold mb-6 leading-[1.05]" style={{ fontFamily: "'Clash Display', sans-serif" }}>
-                GET YOUR<br /><span className="text-primary">FREE QUOTE</span>
+                START YOUR<br /><span className="text-primary">PROJECT</span>
               </h1>
               <p className="text-base text-muted-foreground mb-8">
                 Tell us about your project and we'll connect you with certified ICF contractors who can bring your vision to life.
               </p>
               <div className="space-y-4 hidden lg:block">
-                {["Free, no-obligation quotes", "Matched with local ICF experts", "Response within 24-48 hours", "Compare multiple contractors"].map((item, i) => (
+                {["Connect with local experts", "Matched with certified pros", "Response within 24-48 hours", "Compare multiple contractors"].map((item, i) => (
                   <div key={i} className="flex items-center gap-3 text-sm">
                     <div className="w-5 h-5 bg-primary/10 rounded-sm flex items-center justify-center">
                       <Check className="w-3 h-3 text-primary" />

@@ -133,7 +133,7 @@ export default function ContractorDirectory() {
                     onClick={() => navigate("/get-quote")}
                     className="w-full rounded-sm text-xs tracking-widest font-bold uppercase mt-2"
                   >
-                    REQUEST QUOTE <ArrowRight className="w-3 h-3 ml-2" />
+                    CONTACT PRO <ArrowRight className="w-3 h-3 ml-2" />
                   </Button>
                 </div>
               ))}

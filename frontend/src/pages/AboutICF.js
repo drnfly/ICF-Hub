@@ -44,7 +44,7 @@ export default function AboutICF() {
                 className="rounded-sm text-xs tracking-widest font-bold uppercase px-6 py-3 hard-shadow"
                 size="lg"
               >
-                GET A FREE QUOTE <ArrowRight className="w-4 h-4 ml-2" />
+                START YOUR PROJECT <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </div>
             <div className="col-span-12 lg:col-span-6">
@@ -194,7 +194,7 @@ export default function AboutICF() {
             className="rounded-sm text-xs tracking-widest font-bold uppercase px-8 py-3"
             size="lg"
           >
-            GET YOUR FREE QUOTE <ArrowRight className="w-4 h-4 ml-2" />
+            START YOUR PROJECT <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
         </div>
       </section>

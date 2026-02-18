@@ -53,20 +53,20 @@ export default function LandingPage() {
                 <div className="flex flex-wrap gap-4 animate-fade-up" style={{ animationDelay: "0.4s" }}>
                   <Button
                     data-testid="hero-get-quote-btn"
-                    onClick={() => navigate("/get-quote")}
+                    onClick={() => navigate("/contractors")}
                     className="rounded-sm text-xs tracking-widest font-bold uppercase px-6 py-3 hard-shadow"
                     size="lg"
                   >
-                    GET A FREE QUOTE <ArrowRight className="w-4 h-4 ml-2" />
+                    FIND A CONTRACTOR <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
                   <Button
                     data-testid="hero-find-contractors-btn"
                     variant="outline"
-                    onClick={() => navigate("/contractors")}
+                    onClick={() => navigate("/get-quote")}
                     className="rounded-sm text-xs tracking-widest font-bold uppercase px-6 py-3 border-2"
                     size="lg"
                   >
-                    FIND CONTRACTORS
+                    START PROJECT
                   </Button>
                 </div>
               </div>
@@ -208,7 +208,7 @@ export default function LandingPage() {
             Ready to Build <span className="text-primary">Better?</span>
           </h2>
           <p className="text-base text-secondary-foreground/60 max-w-xl mx-auto mb-10">
-            Get matched with certified ICF contractors in your area. Free quotes, no obligation.
+            Get matched with certified ICF contractors in your area.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <Button
@@ -217,7 +217,7 @@ export default function LandingPage() {
               className="rounded-sm text-xs tracking-widest font-bold uppercase px-8 py-3"
               size="lg"
             >
-              GET YOUR FREE QUOTE <ArrowRight className="w-4 h-4 ml-2" />
+              START YOUR PROJECT <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
             <Button
               data-testid="cta-contractor-btn"

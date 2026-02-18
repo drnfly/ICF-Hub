@@ -40,7 +40,7 @@ export default function Navbar() {
     { to: "/about-icf", label: "WHY ICF" },
     { to: "/contractors", label: "CONTRACTORS" },
     { to: "/pricing", label: "PRICING" },
-    { to: "/get-quote", label: "GET QUOTE" },
+    { to: "/get-quote", label: "START PROJECT" },
   ];
 
   return (
@@ -130,7 +130,7 @@ export default function Navbar() {
                   onClick={() => navigate("/get-quote")}
                   className="rounded-sm text-xs tracking-widest font-bold uppercase px-5 py-2 hard-shadow"
                 >
-                  GET A QUOTE
+                  START PROJECT
                 </Button>
               </>
             )}
@@ -169,7 +169,7 @@ export default function Navbar() {
                     SIGN IN
                   </Button>
                   <Button onClick={() => navigate("/get-quote")} className="flex-1 rounded-sm text-xs tracking-widest">
-                    GET QUOTE
+                    START PROJECT
                   </Button>
                 </>
               )}
