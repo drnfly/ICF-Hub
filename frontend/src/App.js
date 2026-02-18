@@ -17,6 +17,7 @@ import CampaignManager from "@/pages/CampaignManager";
 import ContentCalendar from "@/pages/ContentCalendar";
 import AnalyticsDashboard from "@/pages/AnalyticsDashboard";
 import SocialSettings from "@/pages/SocialSettings";
+import EmailSMSGenerator from "@/pages/EmailSMSGenerator";
 import AdminLeads from "@/pages/AdminLeads";
 
 function App() {
@@ -35,6 +36,7 @@ function App() {
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/payment/success" element={<PaymentResult />} />
             <Route path="/payment/cancel" element={<PaymentResult />} />
+            <Route path="/tools/communication" element={<EmailSMSGenerator />} />
             <Route path="/content" element={<ContentGenerator />} />
             <Route path="/campaigns" element={<CampaignManager />} />
             <Route path="/calendar" element={<ContentCalendar />} />

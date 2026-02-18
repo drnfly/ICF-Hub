@@ -35,6 +35,7 @@ export default function Navbar() {
     { to: "/content", label: "AI CONTENT" },
     { to: "/campaigns", label: "CAMPAIGNS" },
     { to: "/calendar", label: "CALENDAR" },
+    { to: "/tools/communication", label: "COMMUNICATION" },
     { to: "/pricing", label: "UPGRADE" }, // Added Upgrade link for logged in users
   ] : [
     { to: "/about-icf", label: "WHY ICF" },
