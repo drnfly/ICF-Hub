@@ -38,7 +38,7 @@ ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL')
 HUBSPOT_CLIENT_ID = os.environ.get("HUBSPOT_CLIENT_ID", "a4e90530-6747-4810-a931-a342bd209f07")
 HUBSPOT_CLIENT_SECRET = os.environ.get("HUBSPOT_CLIENT_SECRET", "160b8440-80d7-49df-9f97-23fbb4f09712")
 HUBSPOT_REDIRECT_URI = os.environ.get("HUBSPOT_REDIRECT_URI", "http://localhost:8001/api/auth/hubspot/callback")
-HUBSPOT_SCOPES = "crm.objects.contacts.read crm.objects.contacts.write crm.schemas.contacts.read crm.lists.read sales-email-read" 
+HUBSPOT_SCOPES = "crm.objects.contacts.read crm.objects.contacts.write" 
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
