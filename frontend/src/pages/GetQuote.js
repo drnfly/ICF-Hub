@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Zap, Loader2, Check, Paperclip, FileText } from "lucide-react";
+import { Send, Zap, Loader2, Check, Paperclip, FileText, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { v4 as uuidv4 } from 'uuid';
@@ -17,8 +17,41 @@ export default function GetQuote() {
   const [uploading, setUploading] = useState(false);
   const [sessionId] = useState(uuidv4());
   const [complete, setComplete] = useState(false);
+  
+  // Voice State
+  const [isListening, setIsListening] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const recognitionRef = useRef(null);
+  
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // Initialize Speech Recognition
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.lang = 'en-US';
+
+      recognitionRef.current.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setInput(prev => prev + (prev ? " " : "") + transcript);
+        setIsListening(false);
+      };
+
+      recognitionRef.current.onerror = (event) => {
+        console.error("Speech recognition error", event.error);
+        setIsListening(false);
+        toast.error("Voice input failed. Please try again.");
+      };
+
+      recognitionRef.current.onend = () => {
+        setIsListening(false);
+      };
+    }
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -26,9 +59,61 @@ export default function GetQuote() {
     }
   }, [messages, loading, uploading]);
 
+  // TTS Function
+  const speak = (text) => {
+    if (!voiceEnabled) return;
+    
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    
+    // Prioritize realistic female voices available in major browsers/OS
+    const preferredVoice = voices.find(v => 
+      v.name.includes("Google US English Female") || 
+      v.name.includes("Microsoft Zira") || 
+      v.name.includes("Samantha") || 
+      v.name.includes("Victoria") || 
+      (v.name.includes("Female") && v.lang.includes("en"))
+    ) || voices.find(v => v.lang.includes("en-US")) || voices[0];
+
+    if (preferredVoice) utterance.voice = preferredVoice;
+    
+    // Tweaking pitch and rate for a more natural flow
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // Speak AI messages when they arrive
+  useEffect(() => {
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg?.role === "assistant" && !loading) {
+      speak(lastMsg.content);
+    }
+  }, [messages, voiceEnabled]);
+
+  const toggleListening = () => {
+    if (!recognitionRef.current) {
+      toast.error("Voice input is not supported in this browser.");
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+    } else {
+      setIsListening(true);
+      recognitionRef.current.start();
+    }
+  };
+
   const handleSend = async (e) => {
     e.preventDefault();
     if (!input.trim() || loading) return;
+
+    // Stop listening if sending
+    if (isListening) recognitionRef.current?.stop();
 
     const userMsg = input.trim();
     setMessages(p => [...p, { role: "user", content: userMsg }]);
@@ -54,6 +139,7 @@ export default function GetQuote() {
       setLoading(false);
     }
   };
+
 
   const handleFileSelect = async (e) => {
     const file = e.target.files[0];
@@ -135,6 +221,25 @@ export default function GetQuote() {
           <h1 className="text-2xl sm:text-3xl font-bold" style={{ fontFamily: "'Clash Display', sans-serif" }}>
             Let's Build Your <span className="text-primary">Vision</span>
           </h1>
+          <div className="flex justify-center mt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setVoiceEnabled(!voiceEnabled);
+                if (!voiceEnabled) {
+                   // Try to init speech to prompt permission if needed
+                   window.speechSynthesis.getVoices(); 
+                } else {
+                   window.speechSynthesis.cancel();
+                }
+              }}
+              className={`text-xs ${voiceEnabled ? "text-primary bg-primary/10" : "text-muted-foreground"}`}
+            >
+              {voiceEnabled ? <Volume2 className="w-3 h-3 mr-1.5" /> : <VolumeX className="w-3 h-3 mr-1.5" />}
+              {voiceEnabled ? "Voice Output On" : "Voice Output Off"}
+            </Button>
+          </div>
         </div>
 
         <div 
@@ -198,6 +303,18 @@ export default function GetQuote() {
             title="Upload Plans/Blueprints"
           >
             <Paperclip className="w-5 h-5 text-muted-foreground" />
+          </Button>
+          
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className={`h-14 w-14 rounded-sm border-border bg-card hover:bg-muted ${isListening ? "text-red-500 animate-pulse border-red-500/50" : "text-muted-foreground"}`}
+            onClick={toggleListening}
+            disabled={loading || uploading}
+            title={isListening ? "Stop Listening" : "Speak Input"}
+          >
+            {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
           </Button>
           
           <div className="relative flex-1">
