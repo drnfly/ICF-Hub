@@ -294,9 +294,9 @@ export default function GetQuote() {
                 data-testid={`chat-message-bubble-${i}`}
               >
                 {m.isFile ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2" data-testid={`chat-message-file-${i}`}>
                     <FileText className="w-4 h-4" />
-                    <a href={m.fileUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-white/80">
+                    <a href={m.fileUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-white/80" data-testid={`uploaded-file-link-${i}`}>
                       {m.content.replace("Uploaded file: ", "")}
                     </a>
                   </div>
