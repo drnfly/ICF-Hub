@@ -31,7 +31,7 @@ async def analyze_image_with_gpt4o(image_url):
             api_key=os.environ.get('EMERGENT_LLM_KEY'),
             session_id=f"vision_{uuid.uuid4().hex[:8]}",
             system_message="You are an expert architect. Analyze this floor plan image. Identify rooms, layout, and potential ICF construction benefits."
-        )
+        ).with_model("openai", "gpt-5.2")
         
         # Use ImageContent
         image_content = ImageContent(
