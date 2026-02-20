@@ -226,10 +226,10 @@ frontend:
 
 metadata:
   created_by: "testing_agent"
-  version: "1.1"
-  test_sequence: 2
+  version: "1.2"
+  test_sequence: 3
   run_ui: true
-  test_date: "2025-02-20T08:30:00Z"
+  test_date: "2025-02-20T10:15:00Z"
   test_url: "https://lead-gen-build.preview.emergentagent.com/get-quote"
 
 test_plan:
