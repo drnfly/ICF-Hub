@@ -277,8 +277,8 @@ export default function GetQuote() {
           data-testid="intake-chat-container"
         >
           {!isPremium && messageCount > 3 && (
-            <div className="sticky top-0 z-10 flex justify-center w-full">
-               <div className="bg-yellow-100 text-yellow-800 text-xs px-3 py-1 rounded-full border border-yellow-200 shadow-sm">
+            <div className="sticky top-0 z-10 flex justify-center w-full" data-testid="intake-free-messages-banner">
+               <div className="bg-yellow-100 text-yellow-800 text-xs px-3 py-1 rounded-full border border-yellow-200 shadow-sm" data-testid="intake-free-messages-text">
                  {5 - messageCount} free messages remaining
                </div>
             </div>
