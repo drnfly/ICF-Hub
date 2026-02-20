@@ -733,7 +733,7 @@ async def intake_chat(data: ChatRequest):
             api_key=EMERGENT_LLM_KEY,
             session_id=session_id,
             system_message=INTAKE_SYSTEM_PROMPT
-        )
+        ).with_model("openai", "gpt-5.2")
     
     chat = chat_instances[session_id]
     
