@@ -21,6 +21,7 @@ import EmailSMSGenerator from "@/pages/EmailSMSGenerator";
 import AdminLeads from "@/pages/AdminLeads";
 
 function App() {
+import SuperAdmin from "@/pages/SuperAdmin";
   return (
     <BrowserRouter>
       <div className="min-h-screen flex flex-col">
@@ -42,7 +43,7 @@ function App() {
             <Route path="/calendar" element={<ContentCalendar />} />
             <Route path="/analytics" element={<AnalyticsDashboard />} />
             <Route path="/social" element={<SocialSettings />} />
-            <Route path="/admin" element={<AdminLeads />} />
+            <Route path="/admin" element={<SuperAdmin />} />
           </Routes>
         </main>
         <Footer />

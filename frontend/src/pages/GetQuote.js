@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Zap, Loader2, Check, Paperclip, FileText, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
+import { Send, Zap, Loader2, Check, Paperclip, FileText, Mic, MicOff, Volume2, VolumeX, Lock } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { v4 as uuidv4 } from 'uuid';
 
+import HomeownerUpgrade from "@/components/HomeownerUpgrade";
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function GetQuote() {
@@ -18,6 +19,9 @@ export default function GetQuote() {
   const [sessionId] = useState(uuidv4());
   const [complete, setComplete] = useState(false);
   
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [messageCount, setMessageCount] = useState(0);
+  const [isPremium, setIsPremium] = useState(false); // Mocked for now
   // Voice State
   const [isListening, setIsListening] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);

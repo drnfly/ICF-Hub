@@ -684,6 +684,17 @@ Wait for them to upload. When you receive a message starting with "Uploaded file
 Tone: Professional, encouraging, helpful.
 When you have ALL 7 pieces of info (and plans if applicable), your final message MUST start with "COMPLETE:" followed by a summary.
 Example final message: "COMPLETE: Thanks John! I have your details for a New Home in Austin, TX with a $500k budget starting in 3 months. I'll connect you with our top pros now."
+@api_router.get("/admin/users")
+async def get_admin_users():
+    # Fetch all contractors
+    contractors = await db.contractors.find({}, {"_id": 0, "password": 0}).sort("created_at", -1).to_list(100)
+    return contractors
+
+@api_router.get("/admin/payments")
+async def get_admin_payments():
+    # Fetch all transactions
+    payments = await db.payment_transactions.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return payments
 """
 
 @api_router.post("/intake/chat")
