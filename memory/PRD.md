@@ -1,5 +1,7 @@
 # ICF Hub - PRD
 
+Last Updated: 2026-02-20
+
 ## Problem Statement
 User with 10 years ICF construction experience wants a platform to generate revenue. Chose: ICF Education & Marketing Hub with both-sides marketplace model, AI features, and modern/bold design.
 
