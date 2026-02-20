@@ -365,6 +365,7 @@ export default function GetQuote() {
               placeholder="Type your answer here..."
               className="pr-12 py-7 bg-card border-border shadow-sm text-base h-14"
               autoFocus
+              data-testid="intake-message-input"
             />
             <Button
               type="submit"
