@@ -125,11 +125,11 @@ export default function SuperAdmin() {
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="leads" className="w-full">
-          <TabsList className="mb-6">
-            <TabsTrigger value="leads">Intake Leads</TabsTrigger>
-            <TabsTrigger value="users">Users & Contractors</TabsTrigger>
-            <TabsTrigger value="payments">Transactions</TabsTrigger>
+        <Tabs defaultValue="leads" className="w-full" data-testid="admin-tabs">
+          <TabsList className="mb-6" data-testid="admin-tabs-list">
+            <TabsTrigger value="leads" data-testid="admin-tab-leads">Intake Leads</TabsTrigger>
+            <TabsTrigger value="users" data-testid="admin-tab-users">Users & Contractors</TabsTrigger>
+            <TabsTrigger value="payments" data-testid="admin-tab-payments">Transactions</TabsTrigger>
           </TabsList>
 
           <TabsContent value="leads">
