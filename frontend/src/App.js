@@ -19,9 +19,9 @@ import AnalyticsDashboard from "@/pages/AnalyticsDashboard";
 import SocialSettings from "@/pages/SocialSettings";
 import EmailSMSGenerator from "@/pages/EmailSMSGenerator";
 import AdminLeads from "@/pages/AdminLeads";
+import SuperAdmin from "@/pages/SuperAdmin";
 
 function App() {
-import SuperAdmin from "@/pages/SuperAdmin";
   return (
     <BrowserRouter>
       <div className="min-h-screen flex flex-col">
