@@ -263,6 +263,7 @@ export default function GetQuote() {
                 }
               }}
               className={`text-xs ${voiceEnabled ? "text-primary bg-primary/10" : "text-muted-foreground"}`}
+              data-testid="intake-voice-toggle-button"
             >
               {voiceEnabled ? <Volume2 className="w-3 h-3 mr-1.5" /> : <VolumeX className="w-3 h-3 mr-1.5" />}
               {voiceEnabled ? "Voice Output On" : "Voice Output Off"}
