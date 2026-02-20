@@ -132,30 +132,30 @@ export default function SuperAdmin() {
             <TabsTrigger value="payments" data-testid="admin-tab-payments">Transactions</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="leads">
-            <Card>
-              <Table>
+          <TabsContent value="leads" data-testid="admin-leads-tab">
+            <Card data-testid="admin-leads-card">
+              <Table data-testid="admin-leads-table">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Summary</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Source</TableHead>
+                    <TableHead data-testid="admin-leads-header-date">Date</TableHead>
+                    <TableHead data-testid="admin-leads-header-name">Name</TableHead>
+                    <TableHead data-testid="admin-leads-header-summary">Summary</TableHead>
+                    <TableHead data-testid="admin-leads-header-status">Status</TableHead>
+                    <TableHead data-testid="admin-leads-header-source">Source</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.leads.map((lead) => (
-                    <TableRow key={lead.id}>
-                      <TableCell>{new Date(lead.created_at).toLocaleDateString()}</TableCell>
-                      <TableCell>{lead.name || "Anonymous"}</TableCell>
-                      <TableCell className="max-w-md truncate">{lead.chat_summary || "No summary"}</TableCell>
-                      <TableCell>
-                        <Badge variant={lead.status === 'connected' ? "default" : "secondary"}>
+                  {data.leads.map((lead, index) => (
+                    <TableRow key={lead.id} data-testid={`admin-lead-row-${index}`}>
+                      <TableCell data-testid={`admin-lead-date-${index}`}>{new Date(lead.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell data-testid={`admin-lead-name-${index}`}>{lead.name || "Anonymous"}</TableCell>
+                      <TableCell className="max-w-md truncate" data-testid={`admin-lead-summary-${index}`}>{lead.chat_summary || "No summary"}</TableCell>
+                      <TableCell data-testid={`admin-lead-status-${index}`}>
+                        <Badge variant={lead.status === 'connected' ? "default" : "secondary"} data-testid={`admin-lead-status-badge-${index}`}>
                           {lead.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{lead.source}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground" data-testid={`admin-lead-source-${index}`}>{lead.source}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
