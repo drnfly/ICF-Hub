@@ -11,7 +11,7 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function GetQuote() {
   const [messages, setMessages] = useState([
-    { role: "assistant", content: "Hi there! I'm the ICF Hub Intake Assistant. I can help connect you with the perfect certified contractor for your project. To start, what is your first name?" }
+    { role: "assistant", content: "Hi! I'm your AI Architect. To get started, what is your name and where is your project located?" }
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);

@@ -667,23 +667,33 @@ async def update_lead_status(lead_id: str, data: LeadStatusUpdate, user=Depends(
 
 # ─── AI Intake & Matching ───
 
-INTAKE_SYSTEM_PROMPT = """You are ICF Hub's Intake Coordinator. Your job is to have a friendly text chat with a homeowner to gather their project details.
-You need to collect 7 key pieces of information. Ask ONE question at a time.
-Required Info:
-1. First Name
-2. Project Location (City & State)
-3. Project Type (New Home, Addition, Basement, Pool, Commercial)
-4. Estimated Budget
-5. Timeline (When do they want to start?)
-6. Land Status (Do they own the land?)
-7. Plans Status (Do they have blueprints?)
+INTAKE_SYSTEM_PROMPT = """You are ICF Hub's Expert AI Architect.
+Your goal is to gather lead info and then provide expert advice on their specific project.
 
-IMPORTANT: If the user says they HAVE PLANS/BLUEPRINTS, immediately say: "Great! Please use the paperclip icon below to upload your plans now."
-Wait for them to upload. When you receive a message starting with "Uploaded file:", confirm receipt and continue or finish.
+PHASE 1: CONTACT INFO (Ask these first, STRICTLY only these):
+1. Name
+2. Project Location (City, State)
+3. Contact Info (Email or Phone)
 
-Tone: Professional, encouraging, helpful.
-When you have ALL 7 pieces of info (and plans if applicable), your final message MUST start with "COMPLETE:" followed by a summary.
-Example final message: "COMPLETE: Thanks John! I have your details for a New Home in Austin, TX with a $500k budget starting in 3 months. I'll connect you with our top pros now."
+DO NOT ASK FOR BUDGET. DO NOT ASK FOR TIMELINE.
+
+PHASE 2: PROJECT CONTEXT
+4. "Do you have any blueprints, sketches, or plans? If yes, please upload them using the paperclip icon."
+   - If user uploads: Acknowledge it warmly.
+   - If user says NO: "No problem, we can connect you with a designer later."
+
+PHASE 3: EXPERT ASSISTANCE (The Core Value)
+- Ask: "How can I assist you with your project today? I can review your layout, answer technical questions, or help with cost estimates."
+- Answer their specific questions intelligently.
+- Provide high-value, specific advice based on their inputs.
+
+RULES:
+- Be helpful and knowledgeable.
+- Keep the conversation flowing naturally.
+- You have a limit of 5 free expert answers. (The system handles the counting, you just provide the value).
+- If the user asks for a contractor match, finalize the chat.
+"""
+
 @api_router.get("/admin/users")
 async def get_admin_users():
     # Fetch all contractors
@@ -695,7 +705,6 @@ async def get_admin_payments():
     # Fetch all transactions
     payments = await db.payment_transactions.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
     return payments
-"""
 
 @api_router.post("/intake/chat")
 async def intake_chat(data: ChatRequest):
@@ -792,13 +801,21 @@ async def upload_file(session_id: str = Form(...), file: UploadFile = File(...))
             
         file_url = f"{os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:8001')}/uploads/{filename}"
         
-        # Inject file info into chat context
+        # PERSIST Upload Event to Database so Chat History knows about it!
+        system_msg_content = f"[System: User uploaded file: {file_url}. This is a floor plan/image. Please analyze it if possible, or ask the user for details.]"
+        
+        await db.intake_chats.insert_one({
+            "id": str(uuid.uuid4()),
+            "session_id": session_id,
+            "role": "user", # Treat as user action for context
+            "content": system_msg_content,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+
+        # Inject file info into active chat instance if exists
         if session_id in chat_instances:
             chat = chat_instances[session_id]
-            # We explicitly tell the AI about the file
-            # If the underlying LLM supports URL reading (like GPT-4o often can if public), this helps.
-            # If not, at least it knows a file exists.
-            await chat.send_message(UserMessage(text=f"[System: User uploaded file: {file_url}. This is a floor plan/image. Please analyze it if possible, or ask the user for details.]"))
+            await chat.send_message(UserMessage(text=system_msg_content))
 
         # Send Email Notification
         email_sent = send_email_notification(
