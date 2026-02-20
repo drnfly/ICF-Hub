@@ -66,3 +66,8 @@ User with 10 years ICF construction experience wants a platform to generate reve
 - SMS notifications via Twilio
 - A/B testing for social media content
 - White-label options for contractors
+
+## Next Tasks
+- Confirm HubSpot Redirect URL update and validate OAuth callback flow
+- Implement real social media posting APIs (Facebook Graph, LinkedIn, X)
+- Configure SendGrid/Resend for real email notifications
