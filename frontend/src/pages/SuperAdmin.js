@@ -163,29 +163,29 @@ export default function SuperAdmin() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="users">
-            <Card>
-              <Table>
+          <TabsContent value="users" data-testid="admin-users-tab">
+            <Card data-testid="admin-users-card">
+              <Table data-testid="admin-users-table">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Company / Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Plan</TableHead>
-                    <TableHead>Joined</TableHead>
+                    <TableHead data-testid="admin-users-header-company">Company / Name</TableHead>
+                    <TableHead data-testid="admin-users-header-email">Email</TableHead>
+                    <TableHead data-testid="admin-users-header-role">Role</TableHead>
+                    <TableHead data-testid="admin-users-header-plan">Plan</TableHead>
+                    <TableHead data-testid="admin-users-header-joined">Joined</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.users.map((u) => (
-                    <TableRow key={u.id}>
-                      <TableCell>{u.company_name || u.name || "Unknown"}</TableCell>
-                      <TableCell>{u.email}</TableCell>
-                      <TableCell>{u.company_name ? "Contractor" : "Homeowner"}</TableCell>
-                      <TableCell>
-                        {u.plan === 'pro' && <Badge>PRO</Badge>}
-                        {u.plan === 'free' && <Badge variant="outline">FREE</Badge>}
+                  {data.users.map((u, index) => (
+                    <TableRow key={u.id} data-testid={`admin-user-row-${index}`}>
+                      <TableCell data-testid={`admin-user-company-${index}`}>{u.company_name || u.name || "Unknown"}</TableCell>
+                      <TableCell data-testid={`admin-user-email-${index}`}>{u.email}</TableCell>
+                      <TableCell data-testid={`admin-user-role-${index}`}>{u.company_name ? "Contractor" : "Homeowner"}</TableCell>
+                      <TableCell data-testid={`admin-user-plan-${index}`}>
+                        {u.plan === 'pro' && <Badge data-testid={`admin-user-plan-pro-${index}`}>PRO</Badge>}
+                        {u.plan === 'free' && <Badge variant="outline" data-testid={`admin-user-plan-free-${index}`}>FREE</Badge>}
                       </TableCell>
-                      <TableCell>{new Date(u.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell data-testid={`admin-user-joined-${index}`}>{new Date(u.created_at).toLocaleDateString()}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
