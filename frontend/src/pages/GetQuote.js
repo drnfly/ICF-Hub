@@ -358,7 +358,7 @@ export default function GetQuote() {
             {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
           </Button>
           
-          <div className="relative flex-1">
+          <div className="relative flex-1" data-testid="intake-message-input-wrapper">
             <Input
               value={input}
               onChange={e => setInput(e.target.value)}
