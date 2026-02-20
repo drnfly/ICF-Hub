@@ -353,6 +353,7 @@ export default function GetQuote() {
             onClick={toggleListening}
             disabled={loading || uploading}
             title={isListening ? "Stop Listening" : "Speak Input"}
+            data-testid="intake-voice-input-button"
           >
             {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
           </Button>
