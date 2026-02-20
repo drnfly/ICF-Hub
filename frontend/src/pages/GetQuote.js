@@ -18,6 +18,7 @@ export default function GetQuote() {
   const [uploading, setUploading] = useState(false);
   const [sessionId] = useState(uuidv4());
   const [complete, setComplete] = useState(false);
+  const [summary, setSummary] = useState("");
   
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [messageCount, setMessageCount] = useState(0);
