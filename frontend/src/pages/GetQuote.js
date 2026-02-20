@@ -284,13 +284,14 @@ export default function GetQuote() {
             </div>
           )}
           {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+            <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`} data-testid={`chat-message-row-${i}`}>
               <div
                 className={`max-w-[85%] px-5 py-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
                   m.role === "user"
                     ? "bg-primary text-primary-foreground rounded-tr-none"
                     : "bg-muted text-foreground rounded-tl-none"
                 }`}
+                data-testid={`chat-message-bubble-${i}`}
               >
                 {m.isFile ? (
                   <div className="flex items-center gap-2">
