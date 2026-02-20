@@ -801,8 +801,11 @@ async def upload_file(session_id: str = Form(...), file: UploadFile = File(...))
             
         file_url = f"{os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:8001')}/uploads/{filename}"
         
+        # Run Vision Analysis
+        analysis_result = await analyze_image_with_gpt4o(file_url)
+        
         # PERSIST Upload Event to Database so Chat History knows about it!
-        system_msg_content = f"[System: User uploaded file: {file_url}. This is a floor plan/image. Please analyze it if possible, or ask the user for details.]"
+        system_msg_content = f"[System: User uploaded file: {file_url}. Analysis: {analysis_result}]"
         
         await db.intake_chats.insert_one({
             "id": str(uuid.uuid4()),
@@ -815,7 +818,17 @@ async def upload_file(session_id: str = Form(...), file: UploadFile = File(...))
         # Inject file info into active chat instance if exists
         if session_id in chat_instances:
             chat = chat_instances[session_id]
-            await chat.send_message(UserMessage(text=system_msg_content))
+            # Send context silently or as system prompt update if possible, 
+            # but LlmChat is session based. Sending a user message with system info is a workaround.
+            # Ideally, we just append to history and let the NEXT user message trigger the response.
+            # But the user expects a reply to the upload.
+            
+            # Let's trigger an IMMEDIATE AI response to the upload!
+            # The AI should see the analysis and comment on it.
+            
+            # Update: We want the AI to "continue answering questions".
+            # So we just log it. When the user says "What do you think?", the AI reads history.
+            pass
 
         # Send Email Notification
         email_sent = send_email_notification(
