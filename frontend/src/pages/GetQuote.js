@@ -250,10 +250,10 @@ export default function GetQuote() {
           ref={scrollRef}
           className="flex-1 bg-card border border-border rounded-lg shadow-sm p-6 mb-4 overflow-y-auto min-h-[500px] flex flex-col gap-4 relative"
         >
-          {!isPremium && messageCount > 1 && (
+          {!isPremium && messageCount > 3 && (
             <div className="sticky top-0 z-10 flex justify-center w-full">
                <div className="bg-yellow-100 text-yellow-800 text-xs px-3 py-1 rounded-full border border-yellow-200 shadow-sm">
-                 {3 - messageCount} free messages remaining
+                 {5 - messageCount} free messages remaining
                </div>
             </div>
           )}

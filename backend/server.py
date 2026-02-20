@@ -704,7 +704,16 @@ async def intake_chat(data: ChatRequest):
     
     session_id = data.session_id
     
-    # Simple in-memory session persistence for demo (in prod use DB)
+    # 1. Fetch History from DB (Stateless Context)
+    history = await db.intake_chats.find({"session_id": session_id}).sort("created_at", 1).to_list(20)
+    
+    # Format History for Context
+    context_str = "Conversation History:\n"
+    for msg in history:
+        role = "AI" if msg["role"] == "assistant" else "Homeowner"
+        context_str += f"{role}: {msg['content']}\n"
+    
+    # 2. Initialize/Get Chat Instance
     if session_id not in chat_instances:
         chat_instances[session_id] = LlmChat(
             api_key=EMERGENT_LLM_KEY,
@@ -724,7 +733,11 @@ async def intake_chat(data: ChatRequest):
     })
     
     try:
-        response = await chat.send_message(UserMessage(text=data.message))
+        # 3. Send Message with FULL CONTEXT
+        # We append the history to the user's message so the AI "remembers"
+        full_prompt = f"{context_str}\nHomeowner (Current): {data.message}\n(Respond naturally as the Intake Coordinator based on the history)"
+        
+        response = await chat.send_message(UserMessage(text=full_prompt))
     except Exception as e:
         logger.error(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail="AI service unavailable")
@@ -750,12 +763,10 @@ async def intake_chat(data: ChatRequest):
             "source": "ai_intake",
             "chat_summary": response.replace("COMPLETE:", "").strip(),
             "created_at": datetime.now(timezone.utc).isoformat(),
-            # Placeholder data - normally extracted
             "name": "Homeowner (AI Intake)", 
             "city": "Unknown", "state": "Unknown", "project_type": "Unknown"
         })
         
-        # Run Auto-Match Logic
         matches = await db.contractors.find({"plan": "pro"}, {"_id": 0, "id": 1, "company_name": 1, "city": 1, "state": 1}).to_list(3)
         if not matches:
              matches = await db.contractors.find({}, {"_id": 0, "id": 1, "company_name": 1}).to_list(3)
