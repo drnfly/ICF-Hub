@@ -323,7 +323,7 @@ export default function GetQuote() {
           )}
         </div>
 
-        <form onSubmit={handleSend} className="relative flex gap-2">
+        <form onSubmit={handleSend} className="relative flex gap-2" data-testid="intake-chat-form">
           <Input
             type="file"
             ref={fileInputRef}
