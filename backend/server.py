@@ -806,15 +806,20 @@ async def intake_chat(data: ChatRequest):
     
     is_complete = "COMPLETE:" in response
     lead_id = None
+    summary = None
     
     if is_complete:
+        summary = await generate_intake_summary(session_id)
+        if not summary:
+            summary = response.replace("COMPLETE:", "").strip()
+        
         lead_id = str(uuid.uuid4())
         await db.leads.insert_one({
             "id": lead_id,
             "session_id": session_id,
             "status": "pending_match",
             "source": "ai_intake",
-            "chat_summary": response.replace("COMPLETE:", "").strip(),
+            "chat_summary": summary,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "name": "Homeowner (AI Intake)", 
             "city": "Unknown", "state": "Unknown", "project_type": "Unknown"
@@ -829,7 +834,7 @@ async def intake_chat(data: ChatRequest):
             {"$set": {"ai_matches": matches}}
         )
 
-    return {"response": response, "session_id": session_id, "is_complete": is_complete, "lead_id": lead_id}
+    return {"response": response, "session_id": session_id, "is_complete": is_complete, "lead_id": lead_id, "summary": summary}
 
 @api_router.post("/intake/upload")
 async def upload_file(session_id: str = Form(...), file: UploadFile = File(...)):
