@@ -77,13 +77,20 @@ export default function SuperAdmin() {
   }
 
   return (
-    <div className="pt-24 min-h-screen bg-secondary/30 p-6">
+    <div className="pt-24 min-h-screen bg-secondary/30 p-6" data-testid="admin-dashboard-page">
       <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold" style={{ fontFamily: "'Clash Display', sans-serif" }}>
+        <div className="flex flex-wrap gap-3 justify-between items-center mb-8" data-testid="admin-dashboard-header">
+          <h1 className="text-3xl font-bold" style={{ fontFamily: "'Clash Display', sans-serif" }} data-testid="admin-dashboard-title">
             Super Admin <span className="text-primary">Dashboard</span>
           </h1>
-          <Button variant="outline" onClick={() => setAuth(false)}>Logout</Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" data-testid="admin-inventory-portal-button">
+              <a href="https://inventory-app-nine-kappa.vercel.app/" target="_blank" rel="noopener noreferrer">
+                Open Inventory Portal
+              </a>
+            </Button>
+            <Button variant="outline" onClick={() => setAuth(false)} data-testid="admin-logout-button">Logout</Button>
+          </div>
         </div>
 
         {/* Stats Cards */}
