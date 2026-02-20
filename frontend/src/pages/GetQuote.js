@@ -142,6 +142,7 @@ export default function GetQuote() {
       
       if (res.data.is_complete) {
         setComplete(true);
+        setSummary(res.data.summary || "");
         toast.success("Intake complete! Matching you with pros now...");
       }
     } catch (err) {
