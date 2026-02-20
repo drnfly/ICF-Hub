@@ -767,6 +767,8 @@ async def intake_chat(data: ChatRequest):
 
     return {"response": response, "session_id": session_id, "is_complete": is_complete, "lead_id": lead_id}
 
+from app.backend.vision_helper import analyze_image_with_gpt4o
+
 @api_router.post("/intake/upload")
 async def upload_file(session_id: str = Form(...), file: UploadFile = File(...)):
     filename = f"{uuid.uuid4().hex}_{file.filename}"
@@ -779,6 +781,14 @@ async def upload_file(session_id: str = Form(...), file: UploadFile = File(...))
             
         file_url = f"{os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:8001')}/uploads/{filename}"
         
+        # Inject file info into chat context
+        if session_id in chat_instances:
+            chat = chat_instances[session_id]
+            # We explicitly tell the AI about the file
+            # If the underlying LLM supports URL reading (like GPT-4o often can if public), this helps.
+            # If not, at least it knows a file exists.
+            await chat.send_message(UserMessage(text=f"[System: User uploaded file: {file_url}. This is a floor plan/image. Please analyze it if possible, or ask the user for details.]"))
+
         # Send Email Notification
         email_sent = send_email_notification(
             subject=f"New Blueprints Uploaded - Session {session_id[:8]}",
