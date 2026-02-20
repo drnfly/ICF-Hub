@@ -55,10 +55,10 @@ export default function SuperAdmin() {
 
   if (!auth) {
     return (
-      <div className="pt-24 min-h-screen flex items-center justify-center bg-secondary/30">
-        <Card className="w-full max-w-sm">
+      <div className="pt-24 min-h-screen flex items-center justify-center bg-secondary/30" data-testid="admin-login-page">
+        <Card className="w-full max-w-sm" data-testid="admin-login-card">
           <CardHeader>
-            <CardTitle className="text-center">Admin Login</CardTitle>
+            <CardTitle className="text-center" data-testid="admin-login-title">Admin Login</CardTitle>
           </CardHeader>
           <CardContent>
             <Input 
@@ -67,8 +67,9 @@ export default function SuperAdmin() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               className="mb-4"
+              data-testid="admin-login-password-input"
             />
-            <Button className="w-full" onClick={checkAuth}>Login</Button>
+            <Button className="w-full" onClick={checkAuth} data-testid="admin-login-submit-button">Login</Button>
           </CardContent>
         </Card>
       </div>
