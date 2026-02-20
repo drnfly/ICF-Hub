@@ -330,6 +330,7 @@ export default function GetQuote() {
             className="hidden"
             onChange={handleFileSelect}
             accept=".pdf,.jpg,.jpeg,.png"
+            data-testid="intake-file-input"
           />
           <Button
             type="button"
