@@ -246,7 +246,7 @@ export default function GetQuote() {
       <div className="flex-1 max-w-3xl w-full mx-auto p-4 flex flex-col">
         <div className="text-center mb-8 pt-8" data-testid="intake-chat-header">
           <span className="mono-label mb-2 block" data-testid="intake-chat-label">PROJECT INTAKE</span>
-          <h1 className="text-2xl sm:text-3xl font-bold" style={{ fontFamily: "'Clash Display', sans-serif" }}>
+          <h1 className="text-2xl sm:text-3xl font-bold" style={{ fontFamily: "'Clash Display', sans-serif" }} data-testid="intake-chat-title">
             Let's Build Your <span className="text-primary">Vision</span>
           </h1>
           <div className="flex justify-center mt-2">
