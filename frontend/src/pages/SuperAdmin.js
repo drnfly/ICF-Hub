@@ -94,32 +94,32 @@ export default function SuperAdmin() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8" data-testid="admin-stats-grid">
+          <Card data-testid="admin-stat-total-revenue">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+              <CardTitle className="text-sm font-medium" data-testid="admin-stat-total-revenue-label">Total Revenue</CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${data.stats.totalRevenue?.toFixed(2)}</div>
+              <div className="text-2xl font-bold" data-testid="admin-stat-total-revenue-value">${data.stats.totalRevenue?.toFixed(2)}</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card data-testid="admin-stat-pending-leads">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending Leads</CardTitle>
+              <CardTitle className="text-sm font-medium" data-testid="admin-stat-pending-leads-label">Pending Leads</CardTitle>
               <MessageSquare className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{data.stats.activeLeads}</div>
+              <div className="text-2xl font-bold" data-testid="admin-stat-pending-leads-value">{data.stats.activeLeads}</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card data-testid="admin-stat-pro-contractors">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pro Contractors</CardTitle>
+              <CardTitle className="text-sm font-medium" data-testid="admin-stat-pro-contractors-label">Pro Contractors</CardTitle>
               <Shield className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{data.stats.proContractors}</div>
+              <div className="text-2xl font-bold" data-testid="admin-stat-pro-contractors-value">{data.stats.proContractors}</div>
             </CardContent>
           </Card>
         </div>
