@@ -372,6 +372,7 @@ export default function GetQuote() {
               disabled={!input.trim() || loading || uploading}
               size="icon"
               className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 rounded-sm"
+              data-testid="intake-send-button"
             >
               <Send className="w-4 h-4" />
             </Button>
