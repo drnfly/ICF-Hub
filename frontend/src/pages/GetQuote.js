@@ -33,7 +33,7 @@ export default function GetQuote() {
   const summaryItems = summary
     ? summary
         .split("\n")
-        .map(line => line.replace(/^[-*]\s*/, "").trim())
+        .map(line => line.replace(/^[-*•]\s*/, "").trim())
         .filter(Boolean)
     : [];
 
