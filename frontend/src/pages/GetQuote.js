@@ -307,10 +307,10 @@ export default function GetQuote() {
             </div>
           ))}
           {(loading || uploading) && (
-            <div className="flex justify-start">
-              <div className="bg-muted px-4 py-3 rounded-2xl rounded-tl-none flex items-center gap-1.5 shadow-sm">
+            <div className="flex justify-start" data-testid="chat-loading-row">
+              <div className="bg-muted px-4 py-3 rounded-2xl rounded-tl-none flex items-center gap-1.5 shadow-sm" data-testid="chat-loading-indicator">
                 {uploading ? (
-                  <span className="text-xs text-muted-foreground animate-pulse">Uploading file...</span>
+                  <span className="text-xs text-muted-foreground animate-pulse" data-testid="chat-uploading-text">Uploading file...</span>
                 ) : (
                   <>
                     <div className="w-1.5 h-1.5 bg-foreground/40 rounded-full animate-bounce" />
