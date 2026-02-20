@@ -401,6 +401,9 @@ async def hubspot_send(data: HubSpotSendRequest, user=Depends(get_current_contra
         return {"success": True, "message": "Email logged in HubSpot CRM"}
 
 # ─── Contractor Endpoints ───
+# ─── Homeowner Pricing ───
+HOMEOWNER_MONTHLY_PRICE = 19.00
+HOMEOWNER_PASS_PRICE = 49.00
 
 @api_router.get("/contractors")
 async def list_contractors():
@@ -443,6 +446,19 @@ PRO_PLAN_PRICE = 49.00  # $49.00
 
 @api_router.post("/payments/checkout")
 async def create_checkout(data: CheckoutRequest, request: Request, user=Depends(get_current_contractor)):
+    # Note: Depends(get_current_contractor) enforces auth. 
+    # For guest checkout, we need to bypass this or make it optional.
+    # But get_current_contractor raises HTTPException if missing.
+    # We should create a separate public endpoint or modify this one.
+    # For speed, let's make a public wrapper or modify dependency.
+    pass
+
+# We need to redefine the endpoint to handle optional auth
+# But we can't easily change the Depends() without refactoring.
+# Let's add a NEW endpoint for public checkout.
+
+@api_router.post("/payments/public/checkout")
+async def create_public_checkout(data: CheckoutRequest, request: Request):
     global stripe_checkout
     
     # Init stripe if needed
@@ -451,22 +467,68 @@ async def create_checkout(data: CheckoutRequest, request: Request, user=Depends(
     if not stripe_checkout:
         stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
 
-    if data.plan_id != "pro_monthly":
+    if data.plan_id == "homeowner_monthly":
+        amount = HOMEOWNER_MONTHLY_PRICE
+    elif data.plan_id == "homeowner_pass":
+        amount = HOMEOWNER_PASS_PRICE
+    else:
+        raise HTTPException(status_code=400, detail="Invalid plan for guest")
+
+    success_url = f"{data.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{data.origin_url}/payment/cancel"
+
+    checkout_req = CheckoutSessionRequest(
+        amount=amount,
+        currency="usd",
+        quantity=1,
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata={
+            "user_id": "guest_homeowner", # In real app, create a temp user or require email
+            "plan_id": data.plan_id,
+            "type": "subscription" if "monthly" in data.plan_id else "one_time"
+        }
+    )
+
+    try:
+        session = await stripe_checkout.create_checkout_session(checkout_req)
+        return {"url": session.url}
+    except Exception as e:
+        logging.error(f"Stripe error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/payments/checkout")
+async def create_checkout(data: CheckoutRequest, request: Request, user=Depends(get_current_contractor)):
+    global stripe_checkout
+    
+    # Init stripe if needed
+    host_url = str(request.base_url)
+    webhook_url = f"{host_url}api/webhook/stripe"
+    if not stripe_checkout:
+        stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+
+    if data.plan_id == "pro_monthly":
+        amount = PRO_PLAN_PRICE
+    elif data.plan_id == "homeowner_monthly":
+        amount = HOMEOWNER_MONTHLY_PRICE
+    elif data.plan_id == "homeowner_pass":
+        amount = HOMEOWNER_PASS_PRICE
+    else:
         raise HTTPException(status_code=400, detail="Invalid plan")
 
     success_url = f"{data.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{data.origin_url}/payment/cancel"
 
     checkout_req = CheckoutSessionRequest(
-        amount=PRO_PLAN_PRICE,
+        amount=amount,
         currency="usd",
         quantity=1,
         success_url=success_url,
         cancel_url=cancel_url,
         metadata={
-            "user_id": user["id"],
+            "user_id": user["id"] if user else "guest",
             "plan_id": data.plan_id,
-            "type": "subscription"
+            "type": "subscription" if "monthly" in data.plan_id else "one_time"
         }
     )
 
@@ -477,8 +539,8 @@ async def create_checkout(data: CheckoutRequest, request: Request, user=Depends(
         await db.payment_transactions.insert_one({
             "id": str(uuid.uuid4()),
             "session_id": session.session_id,
-            "user_id": user["id"],
-            "amount": PRO_PLAN_PRICE,
+            "user_id": user["id"] if user else "guest",
+            "amount": amount,
             "currency": "usd",
             "status": "pending",
             "plan_id": data.plan_id,

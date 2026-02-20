@@ -244,8 +244,15 @@ export default function GetQuote() {
 
         <div 
           ref={scrollRef}
-          className="flex-1 bg-card border border-border rounded-lg shadow-sm p-6 mb-4 overflow-y-auto min-h-[500px] flex flex-col gap-4"
+          className="flex-1 bg-card border border-border rounded-lg shadow-sm p-6 mb-4 overflow-y-auto min-h-[500px] flex flex-col gap-4 relative"
         >
+          {!isPremium && messageCount > 3 && (
+            <div className="sticky top-0 z-10 flex justify-center w-full">
+               <div className="bg-yellow-100 text-yellow-800 text-xs px-3 py-1 rounded-full border border-yellow-200 shadow-sm">
+                 {5 - messageCount} free messages remaining
+               </div>
+            </div>
+          )}
           {messages.map((m, i) => (
             <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
               <div
@@ -336,6 +343,7 @@ export default function GetQuote() {
           </div>
         </form>
       </div>
+      <HomeownerUpgrade open={showUpgrade} onOpenChange={setShowUpgrade} />
     </div>
   );
 }
