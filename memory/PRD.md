@@ -48,7 +48,7 @@ User with 10 years ICF construction experience wants a platform to generate reve
 
 ## Prioritized Backlog
 ### P0
-- Stripe payment integration for contractor subscriptions
+- HubSpot OAuth redirect reliability (requires user to update Redirect URL and confirm callback)
 - Implement real social media API posting (Facebook Graph, LinkedIn, X APIs) using stored tokens
 - Real email notifications via SendGrid/Resend (currently in-app only)
 
