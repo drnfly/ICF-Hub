@@ -30,6 +30,12 @@ export default function GetQuote() {
   
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
+  const summaryItems = summary
+    ? summary
+        .split("\n")
+        .map(line => line.replace(/^[-*]\s*/, "").trim())
+        .filter(Boolean)
+    : [];
 
   // Initialize Speech Recognition
   useEffect(() => {
