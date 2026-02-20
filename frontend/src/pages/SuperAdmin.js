@@ -193,28 +193,28 @@ export default function SuperAdmin() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="payments">
-            <Card>
-              <Table>
+          <TabsContent value="payments" data-testid="admin-payments-tab">
+            <Card data-testid="admin-payments-card">
+              <Table data-testid="admin-payments-table">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Plan ID</TableHead>
+                    <TableHead data-testid="admin-payments-header-date">Date</TableHead>
+                    <TableHead data-testid="admin-payments-header-amount">Amount</TableHead>
+                    <TableHead data-testid="admin-payments-header-status">Status</TableHead>
+                    <TableHead data-testid="admin-payments-header-plan">Plan ID</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.payments.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell>{new Date(p.created_at).toLocaleDateString()}</TableCell>
-                      <TableCell>${p.amount}</TableCell>
-                      <TableCell>
-                        <Badge variant={p.payment_status === 'paid' ? "default" : "destructive"}>
+                  {data.payments.map((p, index) => (
+                    <TableRow key={p.id} data-testid={`admin-payment-row-${index}`}>
+                      <TableCell data-testid={`admin-payment-date-${index}`}>{new Date(p.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell data-testid={`admin-payment-amount-${index}`}>${p.amount}</TableCell>
+                      <TableCell data-testid={`admin-payment-status-${index}`}>
+                        <Badge variant={p.payment_status === 'paid' ? "default" : "destructive"} data-testid={`admin-payment-status-badge-${index}`}>
                           {p.payment_status || p.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-xs font-mono">{p.plan_id}</TableCell>
+                      <TableCell className="text-xs font-mono" data-testid={`admin-payment-plan-${index}`}>{p.plan_id}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
