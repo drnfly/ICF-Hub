@@ -202,21 +202,37 @@ export default function GetQuote() {
 
   if (complete) {
     return (
-      <div className="pt-16 min-h-screen flex items-center justify-center noise-bg blueprint-grid">
-        <div className="text-center max-w-lg px-6 animate-fade-up">
-          <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
+      <div className="pt-16 min-h-screen flex items-center justify-center noise-bg blueprint-grid" data-testid="intake-complete-screen">
+        <div className="text-center max-w-lg px-6 animate-fade-up" data-testid="intake-complete-content">
+          <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6" data-testid="intake-complete-icon">
             <Check className="w-10 h-10 text-primary" />
           </div>
-          <h2 className="text-3xl font-bold mb-4" style={{ fontFamily: "'Clash Display', sans-serif" }}>
+          <h2 className="text-3xl font-bold mb-4" style={{ fontFamily: "'Clash Display', sans-serif" }} data-testid="intake-complete-title">
             We've Found Your <span className="text-primary">Match!</span>
           </h2>
-          <p className="text-base text-muted-foreground mb-8">
+          <p className="text-base text-muted-foreground mb-8" data-testid="intake-complete-description">
             Based on your project details, we've identified certified ICF contractors in your area who are perfect for the job. Our team is reviewing the connection and you'll receive an introduction shortly.
           </p>
+          {summaryItems.length > 0 && (
+            <div className="bg-card border border-border rounded-lg p-5 text-left shadow-sm mb-6" data-testid="intake-summary-card">
+              <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground mb-3" data-testid="intake-summary-title">
+                Your Intake Summary
+              </h3>
+              <ul className="space-y-2 text-sm" data-testid="intake-summary-list">
+                {summaryItems.map((item, idx) => (
+                  <li key={idx} className="flex gap-2" data-testid={`intake-summary-item-${idx}`}>
+                    <span className="text-primary">•</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <Button
             onClick={() => window.location.href = "/"}
             className="rounded-sm text-xs tracking-widest font-bold uppercase px-8 py-3"
             size="lg"
+            data-testid="intake-back-home-button"
           >
             BACK TO HOME
           </Button>
