@@ -45,6 +45,7 @@ User with 10 years ICF construction experience wants a platform to generate reve
 
 ## What's Been Implemented (Mar 2026)
 - Stabilized AI intake assistant by fixing logger initialization order, moving vision import to top-level, and switching intake chat + vision to GPT-5.2.
+- Auto-saved intake summary on completion (bullet list with blueprint insights) displayed to homeowner and stored on lead records.
 
 ## Prioritized Backlog
 ### P0
