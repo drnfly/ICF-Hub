@@ -43,6 +43,9 @@ User with 10 years ICF construction experience wants a platform to generate reve
 - **Notification System** — In-app notifications triggered on new leads and post publishing, with unread count badge, mark read/all read
 - **Connect Social Media** — Settings page to link Facebook, Instagram, LinkedIn, X/Twitter, TikTok accounts with API tokens. Connection summary dashboard. Calendar shows auto-post status per platform. Publish flow checks connected accounts.
 
+## What's Been Implemented (Mar 2026)
+- Stabilized AI intake assistant by fixing logger initialization order, moving vision import to top-level, and switching intake chat + vision to GPT-5.2.
+
 ## Prioritized Backlog
 ### P0
 - Stripe payment integration for contractor subscriptions
