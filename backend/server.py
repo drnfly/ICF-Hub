@@ -743,13 +743,14 @@ async def intake_chat(data: ChatRequest):
     
     try:
         # 3. Send Message with FULL CONTEXT
-        # We append the history to the user's message so the AI "remembers"
         full_prompt = f"{context_str}\nHomeowner (Current): {data.message}\n(Respond naturally as the Intake Coordinator based on the history)"
         
+        logger.info(f"Sending chat message for session {session_id}")
         response = await chat.send_message(UserMessage(text=full_prompt))
+        logger.info("Chat response received")
     except Exception as e:
-        logger.error(f"Chat error: {e}")
-        raise HTTPException(status_code=500, detail="AI service unavailable")
+        logger.error(f"Chat error details: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
     
     # Store assistant msg
     await db.intake_chats.insert_one({
