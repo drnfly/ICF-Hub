@@ -100,91 +100,134 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Test AI intake assistant on /get-quote page: 1) Navigate and verify page loads, 2) Send chat message and verify response, 3) Send second message to test session persistence, 4) Upload blueprint image and verify success, 5) Check for paywall modal"
+user_problem_statement: "Test new intake summary feature on /get-quote page: 1) Confirm page loads with AI greeting, 2) Send message with contact info, 3) Send message with project details, 4) Upload blueprint image, 5) Send completion message to match with contractors, 6) VERIFY completion screen appears WITH a short bullet list summary block visible"
 
-frontend:
-  - task: "Get Quote Page Load"
+backend:
+  - task: "Intake Completion Trigger - AI Prompt"
     implemented: true
-    working: true
-    file: "/app/frontend/src/pages/GetQuote.js"
-    stuck_count: 0
+    working: false
+    file: "/app/backend/server.py"
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
-        - working: true
+        - working: false
           agent: "testing"
-          timestamp: "2025-02-20T07:14:00Z"
-          comment: "Page loads successfully at /get-quote. Chat container visible with initial AI greeting message 'Hi! I'm your AI Architect. To get started, what is your name and where is your project located?' No console errors or network errors detected. Screenshot: 01-initial-page-load.png"
+          timestamp: "2025-02-20T08:30:00Z"
+          comment: "CRITICAL BUG FOUND: The INTAKE_SYSTEM_PROMPT (lines 675-700) does not instruct the AI to output 'COMPLETE:' when finalizing the intake. Line 699 says 'If the user asks for a contractor match, finalize the chat' but doesn't specify HOW to finalize. Backend code at line 807 checks for 'COMPLETE:' in response: `is_complete = 'COMPLETE:' in response`. However, the AI never outputs this keyword, so intake never completes. AI keeps asking follow-up questions instead of completing. This prevents the entire intake summary feature from being tested."
 
-  - task: "Chat Message Sending and Response"
-    implemented: true
-    working: true
-    file: "/app/frontend/src/pages/GetQuote.js"
-    stuck_count: 0
-    priority: "high"
-    needs_retesting: false
-    status_history:
-        - working: true
-          agent: "testing"
-          timestamp: "2025-02-20T07:14:00Z"
-          comment: "Sent test message 'Hi, I'm John Smith and I need an ICF home in Austin, Texas'. Loading indicator (thinking dots) appeared and disappeared correctly. AI response received successfully: 'Thanks, John Smith. 1) **Project location (City, State):** I have **Austin, Texas** — can you confirm that's correct? 2) **Best contact info (email or phone):** What's the best email address or phone number to reach you?' No infinite thinking dots issue. Response renders properly. Screenshot: 02-after-first-message.png"
-
-  - task: "Session Persistence"
-    implemented: true
-    working: true
-    file: "/app/frontend/src/pages/GetQuote.js"
-    stuck_count: 0
-    priority: "high"
-    needs_retesting: false
-    status_history:
-        - working: true
-          agent: "testing"
-          timestamp: "2025-02-20T07:14:00Z"
-          comment: "Sent second message 'I'd like a 3-bedroom home with about 2500 square feet'. Session persisted correctly - message count increased from 2 to 3 messages. AI responded with context from previous message showing session continuity. Response: 'Got it — a **3-bedroom, ~2,500 sq ft** ICF home in **Austin, Texas**. Before we go further, I just need one last item for our intake: 3) **Best contact info (email or phone):** What's the best email address or phone number to reach you?' Screenshot: 03-after-second-message.png"
-
-  - task: "File Upload Functionality"
-    implemented: true
-    working: true
-    file: "/app/frontend/src/pages/GetQuote.js"
-    stuck_count: 0
-    priority: "high"
-    needs_retesting: false
-    status_history:
-        - working: true
-          agent: "testing"
-          timestamp: "2025-02-20T07:14:00Z"
-          comment: "File upload test completed successfully. Upload button with paperclip icon visible. Selected test_blueprint.png file. 'Uploading file...' indicator appeared and then disappeared indicating successful upload. File message 'Uploaded file: test_blueprint.png' appears in chat with file icon and link. Backend responded with analysis. Chat did not hang during or after upload. Screenshot: 04-after-file-upload.png"
-
-  - task: "Paywall Modal Check"
+  - task: "Intake Summary Generation"
     implemented: true
     working: "NA"
-    file: "/app/frontend/src/pages/GetQuote.js"
+    file: "/app/backend/server.py"
     stuck_count: 0
-    priority: "low"
-    needs_retesting: false
+    priority: "high"
+    needs_retesting: true
     status_history:
         - working: "NA"
           agent: "testing"
-          timestamp: "2025-02-20T07:14:00Z"
-          comment: "Paywall modal not visible after 4 interactions (2 chat messages + 1 file upload). Code shows paywall logic exists with messageCount tracking and showUpgrade state, but threshold not reached in this test. Expected behavior - paywall should appear after free limit is exceeded. Feature exists but not triggered during testing."
+          timestamp: "2025-02-20T08:30:00Z"
+          comment: "Cannot test - dependent on intake completion trigger which is broken. Code exists at lines 702-738 (generate_intake_summary function) and appears well-structured. It creates a structured summary with bullets for: Name, Location, Contact, Project Type/Size, Budget, Timeline, Key Requirements, Blueprint Insights, Next Steps. Will need retesting after completion trigger is fixed."
+
+frontend:
+  - task: "Get Quote Page Load and Initial Greeting"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/pages/GetQuote.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          timestamp: "2025-02-20T08:30:00Z"
+          comment: "✅ PASS: Page loads successfully at /get-quote. Initial AI greeting message displayed correctly: 'Hi! I'm your AI Architect. To get started, what is your name and where is your project located?' No console errors or network errors detected. UI renders cleanly. Screenshot: 01-initial-page-load.png"
+
+  - task: "Chat Messaging - Contact Info Exchange"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/pages/GetQuote.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          timestamp: "2025-02-20T08:30:00Z"
+          comment: "✅ PASS: Sent message 'My name is Alex Carter. I'm building in Denver, CO. Email alex@example.com.' Loading indicator appeared and disappeared correctly. AI responded appropriately with acknowledgment of contact info. Message flow works smoothly. Screenshot: 02-after-first-message.png"
+
+  - task: "Chat Messaging - Project Details Exchange"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/pages/GetQuote.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          timestamp: "2025-02-20T08:30:00Z"
+          comment: "✅ PASS: Sent message 'I'm planning a 2,200 sq ft ICF home, budget around $450k, timeline 7 months.' AI responded with follow-up questions about blueprints. Session persistence working correctly. Loading states work properly. Screenshot: 03-after-second-message.png"
+
+  - task: "File Upload - Blueprint Image"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/pages/GetQuote.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          timestamp: "2025-02-20T08:30:00Z"
+          comment: "✅ PASS: File upload completed successfully. Selected test_blueprint.png file via paperclip button. 'Uploading file...' indicator appeared and disappeared correctly. File message appeared in chat with file name. Backend analysis received. No errors during upload. Screenshot: 04-after-file-upload.png"
+
+  - task: "Intake Completion Screen"
+    implemented: true
+    working: false
+    file: "/app/frontend/src/pages/GetQuote.js"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: false
+          agent: "testing"
+          timestamp: "2025-02-20T08:30:00Z"
+          comment: "❌ FAIL: Completion screen did NOT appear after sending 'Please match me with contractors now.' message. AI responded asking for more clarification instead of completing. Tested multiple variations of completion messages - all failed. Frontend code (lines 203-242) is correctly implemented with completion screen and summary card. Issue is backend AI not triggering completion (is_complete flag never set to true). Screenshot: 05-no-completion-screen.png"
+
+  - task: "Intake Summary Card Display (NEW FEATURE)"
+    implemented: true
+    working: false
+    file: "/app/frontend/src/pages/GetQuote.js"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: false
+          agent: "testing"
+          timestamp: "2025-02-20T08:30:00Z"
+          comment: "❌ FAIL: CANNOT TEST - Completion screen never appeared, so intake summary card never rendered. Frontend code is properly implemented (lines 216-230): summary card with data-testid='intake-summary-card', title 'Your Intake Summary', and bulleted list of summary items. The feature is coded correctly but blocked by backend completion trigger bug. Needs retesting after backend fix."
 
 metadata:
   created_by: "testing_agent"
-  version: "1.0"
-  test_sequence: 1
+  version: "1.1"
+  test_sequence: 2
   run_ui: true
-  test_date: "2025-02-20T07:14:00Z"
+  test_date: "2025-02-20T08:30:00Z"
   test_url: "https://lead-gen-build.preview.emergentagent.com/get-quote"
 
 test_plan:
   current_focus:
-    - "All core /get-quote functionality tested and verified"
-  stuck_tasks: []
-  test_all: true
-  test_priority: "sequential"
-  test_completed: true
+    - "Intake Completion Trigger - AI Prompt (CRITICAL - BLOCKING)"
+    - "Intake Summary Generation (BLOCKED)"
+    - "Intake Summary Card Display (BLOCKED)"
+  stuck_tasks:
+    - "Intake Completion Trigger - AI Prompt"
+  test_all: false
+  test_priority: "high_first"
+  test_completed: false
 
 agent_communication:
     - agent: "testing"
-      timestamp: "2025-02-20T07:14:00Z"
-      message: "Comprehensive testing completed on /get-quote AI intake assistant. All 5 test requirements passed successfully. Page loads cleanly, chat messaging works bidirectionally with proper loading states, session persistence confirmed across multiple messages, file upload functions with proper UI feedback, and no errors detected (console, network, or UI). Screenshots captured at each stage. Ready for production. Voice features (microphone and TTS) were not tested due to system limitations."
+      timestamp: "2025-02-20T08:30:00Z"
+      message: "Testing completed for intake summary feature. CRITICAL BUG IDENTIFIED: The backend INTAKE_SYSTEM_PROMPT does not instruct the AI to output 'COMPLETE:' keyword when user requests contractor matching. This prevents intake from ever completing, blocking the entire summary feature. All chat functionality (messages, file upload, session persistence) works correctly. Frontend completion screen and summary card code is properly implemented with correct data-testids and structure. The only issue is the AI prompt engineering in backend - needs explicit instruction to output 'COMPLETE: [message]' when finalizing intake. Recommend updating INTAKE_SYSTEM_PROMPT at line 699 to: 'If the user asks for a contractor match, respond with COMPLETE: followed by a brief confirmation to finalize the intake.'"
