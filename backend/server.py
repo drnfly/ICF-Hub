@@ -699,6 +699,44 @@ RULES:
 - If the user asks for a contractor match, finalize the chat.
 """
 
+async def generate_intake_summary(session_id: str) -> str:
+    history = await db.intake_chats.find({"session_id": session_id}).sort("created_at", 1).to_list(50)
+    if not history:
+        return ""
+
+    summary_context = []
+    for msg in history:
+        role = "AI" if msg["role"] == "assistant" else "Homeowner"
+        summary_context.append(f"{role}: {msg['content']}")
+
+    summary_prompt = (
+        "Create a concise bullet list summary of this intake conversation. "
+        "Use short bullets and include any blueprint/plan analysis details if present. "
+        "If a detail is missing, write 'Unknown'. Use this exact format:\n"
+        "- Name:\n"
+        "- Location:\n"
+        "- Contact:\n"
+        "- Project Type/Size:\n"
+        "- Budget:\n"
+        "- Timeline:\n"
+        "- Key Requirements:\n"
+        "- Blueprint Insights:\n"
+        "- Next Steps:\n\n"
+        f"Conversation:\n{chr(10).join(summary_context)}"
+    )
+
+    try:
+        summary_chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"summary_{session_id}",
+            system_message="You summarize homeowner intake chats for ICF Hub."
+        ).with_model("openai", "gpt-5.2")
+        summary_response = await summary_chat.send_message(UserMessage(text=summary_prompt))
+        return summary_response
+    except Exception as e:
+        logger.error(f"Summary generation failed for session {session_id}: {e}")
+        return ""
+
 @api_router.get("/admin/users")
 async def get_admin_users():
     # Fetch all contractors
