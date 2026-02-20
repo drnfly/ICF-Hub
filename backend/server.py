@@ -767,7 +767,7 @@ async def intake_chat(data: ChatRequest):
 
     return {"response": response, "session_id": session_id, "is_complete": is_complete, "lead_id": lead_id}
 
-from app.backend.vision_helper import analyze_image_with_gpt4o
+from vision_helper import analyze_image_with_gpt4o
 
 @api_router.post("/intake/upload")
 async def upload_file(session_id: str = Form(...), file: UploadFile = File(...)):
