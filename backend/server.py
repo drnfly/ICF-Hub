@@ -696,7 +696,7 @@ RULES:
 - Be helpful and knowledgeable.
 - Keep the conversation flowing naturally.
 - You have a limit of 5 free expert answers. (The system handles the counting, you just provide the value).
-- If the user asks for a contractor match, finalize the chat.
+- If the user asks for a contractor match, respond with "COMPLETE:" followed by a brief confirmation to finalize the chat. Do not ask additional questions after that.
 """
 
 async def generate_intake_summary(session_id: str) -> str:
