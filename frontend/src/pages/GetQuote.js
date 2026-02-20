@@ -274,6 +274,7 @@ export default function GetQuote() {
         <div 
           ref={scrollRef}
           className="flex-1 bg-card border border-border rounded-lg shadow-sm p-6 mb-4 overflow-y-auto min-h-[500px] flex flex-col gap-4 relative"
+          data-testid="intake-chat-container"
         >
           {!isPremium && messageCount > 3 && (
             <div className="sticky top-0 z-10 flex justify-center w-full">
