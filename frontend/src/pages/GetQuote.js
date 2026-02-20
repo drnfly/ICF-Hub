@@ -340,6 +340,7 @@ export default function GetQuote() {
             onClick={() => fileInputRef.current?.click()}
             disabled={loading || uploading}
             title="Upload Plans/Blueprints"
+            data-testid="intake-upload-button"
           >
             <Paperclip className="w-5 h-5 text-muted-foreground" />
           </Button>
