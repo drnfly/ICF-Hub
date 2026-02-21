@@ -19,6 +19,7 @@ import AnalyticsDashboard from "@/pages/AnalyticsDashboard";
 import SocialSettings from "@/pages/SocialSettings";
 import EmailSMSGenerator from "@/pages/EmailSMSGenerator";
 import AdminLeads from "@/pages/AdminLeads";
+import SuperAdmin from "@/pages/SuperAdmin";
 
 function App() {
   return (
@@ -42,7 +43,7 @@ function App() {
             <Route path="/calendar" element={<ContentCalendar />} />
             <Route path="/analytics" element={<AnalyticsDashboard />} />
             <Route path="/social" element={<SocialSettings />} />
-            <Route path="/admin" element={<AdminLeads />} />
+            <Route path="/admin" element={<SuperAdmin />} />
           </Routes>
         </main>
         <Footer />

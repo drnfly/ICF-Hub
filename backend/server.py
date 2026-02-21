@@ -20,8 +20,13 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
 from routes import content
+from vision_helper import analyze_image_with_gpt4o
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -401,6 +406,9 @@ async def hubspot_send(data: HubSpotSendRequest, user=Depends(get_current_contra
         return {"success": True, "message": "Email logged in HubSpot CRM"}
 
 # ─── Contractor Endpoints ───
+# ─── Homeowner Pricing ───
+HOMEOWNER_MONTHLY_PRICE = 19.00
+HOMEOWNER_PASS_PRICE = 49.00
 
 @api_router.get("/contractors")
 async def list_contractors():
@@ -443,6 +451,19 @@ PRO_PLAN_PRICE = 49.00  # $49.00
 
 @api_router.post("/payments/checkout")
 async def create_checkout(data: CheckoutRequest, request: Request, user=Depends(get_current_contractor)):
+    # Note: Depends(get_current_contractor) enforces auth. 
+    # For guest checkout, we need to bypass this or make it optional.
+    # But get_current_contractor raises HTTPException if missing.
+    # We should create a separate public endpoint or modify this one.
+    # For speed, let's make a public wrapper or modify dependency.
+    pass
+
+# We need to redefine the endpoint to handle optional auth
+# But we can't easily change the Depends() without refactoring.
+# Let's add a NEW endpoint for public checkout.
+
+@api_router.post("/payments/public/checkout")
+async def create_public_checkout(data: CheckoutRequest, request: Request):
     global stripe_checkout
     
     # Init stripe if needed
@@ -451,22 +472,68 @@ async def create_checkout(data: CheckoutRequest, request: Request, user=Depends(
     if not stripe_checkout:
         stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
 
-    if data.plan_id != "pro_monthly":
+    if data.plan_id == "homeowner_monthly":
+        amount = HOMEOWNER_MONTHLY_PRICE
+    elif data.plan_id == "homeowner_pass":
+        amount = HOMEOWNER_PASS_PRICE
+    else:
+        raise HTTPException(status_code=400, detail="Invalid plan for guest")
+
+    success_url = f"{data.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{data.origin_url}/payment/cancel"
+
+    checkout_req = CheckoutSessionRequest(
+        amount=amount,
+        currency="usd",
+        quantity=1,
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata={
+            "user_id": "guest_homeowner", # In real app, create a temp user or require email
+            "plan_id": data.plan_id,
+            "type": "subscription" if "monthly" in data.plan_id else "one_time"
+        }
+    )
+
+    try:
+        session = await stripe_checkout.create_checkout_session(checkout_req)
+        return {"url": session.url}
+    except Exception as e:
+        logging.error(f"Stripe error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/payments/checkout")
+async def create_checkout(data: CheckoutRequest, request: Request, user=Depends(get_current_contractor)):
+    global stripe_checkout
+    
+    # Init stripe if needed
+    host_url = str(request.base_url)
+    webhook_url = f"{host_url}api/webhook/stripe"
+    if not stripe_checkout:
+        stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+
+    if data.plan_id == "pro_monthly":
+        amount = PRO_PLAN_PRICE
+    elif data.plan_id == "homeowner_monthly":
+        amount = HOMEOWNER_MONTHLY_PRICE
+    elif data.plan_id == "homeowner_pass":
+        amount = HOMEOWNER_PASS_PRICE
+    else:
         raise HTTPException(status_code=400, detail="Invalid plan")
 
     success_url = f"{data.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{data.origin_url}/payment/cancel"
 
     checkout_req = CheckoutSessionRequest(
-        amount=PRO_PLAN_PRICE,
+        amount=amount,
         currency="usd",
         quantity=1,
         success_url=success_url,
         cancel_url=cancel_url,
         metadata={
-            "user_id": user["id"],
+            "user_id": user["id"] if user else "guest",
             "plan_id": data.plan_id,
-            "type": "subscription"
+            "type": "subscription" if "monthly" in data.plan_id else "one_time"
         }
     )
 
@@ -477,8 +544,8 @@ async def create_checkout(data: CheckoutRequest, request: Request, user=Depends(
         await db.payment_transactions.insert_one({
             "id": str(uuid.uuid4()),
             "session_id": session.session_id,
-            "user_id": user["id"],
-            "amount": PRO_PLAN_PRICE,
+            "user_id": user["id"] if user else "guest",
+            "amount": amount,
             "currency": "usd",
             "status": "pending",
             "plan_id": data.plan_id,
@@ -605,24 +672,82 @@ async def update_lead_status(lead_id: str, data: LeadStatusUpdate, user=Depends(
 
 # ─── AI Intake & Matching ───
 
-INTAKE_SYSTEM_PROMPT = """You are ICF Hub's Intake Coordinator. Your job is to have a friendly text chat with a homeowner to gather their project details.
-You need to collect 7 key pieces of information. Ask ONE question at a time.
-Required Info:
-1. First Name
-2. Project Location (City & State)
-3. Project Type (New Home, Addition, Basement, Pool, Commercial)
-4. Estimated Budget
-5. Timeline (When do they want to start?)
-6. Land Status (Do they own the land?)
-7. Plans Status (Do they have blueprints?)
+INTAKE_SYSTEM_PROMPT = """You are ICF Hub's Expert AI Architect.
+Your goal is to gather lead info and then provide expert advice on their specific project.
 
-IMPORTANT: If the user says they HAVE PLANS/BLUEPRINTS, immediately say: "Great! Please use the paperclip icon below to upload your plans now."
-Wait for them to upload. When you receive a message starting with "Uploaded file:", confirm receipt and continue or finish.
+PHASE 1: CONTACT INFO (Ask these first, STRICTLY only these):
+1. Name
+2. Project Location (City, State)
+3. Contact Info (Email or Phone)
 
-Tone: Professional, encouraging, helpful.
-When you have ALL 7 pieces of info (and plans if applicable), your final message MUST start with "COMPLETE:" followed by a summary.
-Example final message: "COMPLETE: Thanks John! I have your details for a New Home in Austin, TX with a $500k budget starting in 3 months. I'll connect you with our top pros now."
+DO NOT ASK FOR BUDGET. DO NOT ASK FOR TIMELINE.
+
+PHASE 2: PROJECT CONTEXT
+4. "Do you have any blueprints, sketches, or plans? If yes, please upload them using the paperclip icon."
+   - If user uploads: Acknowledge it warmly.
+   - If user says NO: "No problem, we can connect you with a designer later."
+
+PHASE 3: EXPERT ASSISTANCE (The Core Value)
+- Ask: "How can I assist you with your project today? I can review your layout, answer technical questions, or help with cost estimates."
+- Answer their specific questions intelligently.
+- Provide high-value, specific advice based on their inputs.
+
+RULES:
+- Be helpful and knowledgeable.
+- Keep the conversation flowing naturally.
+- You have a limit of 5 free expert answers. (The system handles the counting, you just provide the value).
+- If the user asks for a contractor match, respond with "COMPLETE:" followed by a brief confirmation to finalize the chat. Do not ask additional questions after that.
 """
+
+async def generate_intake_summary(session_id: str) -> str:
+    history = await db.intake_chats.find({"session_id": session_id}).sort("created_at", 1).to_list(50)
+    if not history:
+        return ""
+
+    summary_context = []
+    for msg in history:
+        role = "AI" if msg["role"] == "assistant" else "Homeowner"
+        summary_context.append(f"{role}: {msg['content']}")
+
+    summary_prompt = (
+        "Create a concise bullet list summary of this intake conversation. "
+        "Use short bullets and include any blueprint/plan analysis details if present. "
+        "If a detail is missing, write 'Unknown'. Use this exact format:\n"
+        "- Name:\n"
+        "- Location:\n"
+        "- Contact:\n"
+        "- Project Type/Size:\n"
+        "- Budget:\n"
+        "- Timeline:\n"
+        "- Key Requirements:\n"
+        "- Blueprint Insights:\n"
+        "- Next Steps:\n\n"
+        f"Conversation:\n{chr(10).join(summary_context)}"
+    )
+
+    try:
+        summary_chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"summary_{session_id}",
+            system_message="You summarize homeowner intake chats for ICF Hub."
+        ).with_model("openai", "gpt-5.2")
+        summary_response = await summary_chat.send_message(UserMessage(text=summary_prompt))
+        return summary_response
+    except Exception as e:
+        logger.error(f"Summary generation failed for session {session_id}: {e}")
+        return ""
+
+@api_router.get("/admin/users")
+async def get_admin_users():
+    # Fetch all contractors
+    contractors = await db.contractors.find({}, {"_id": 0, "password": 0}).sort("created_at", -1).to_list(100)
+    return contractors
+
+@api_router.get("/admin/payments")
+async def get_admin_payments():
+    # Fetch all transactions
+    payments = await db.payment_transactions.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return payments
 
 @api_router.post("/intake/chat")
 async def intake_chat(data: ChatRequest):
@@ -631,13 +756,22 @@ async def intake_chat(data: ChatRequest):
     
     session_id = data.session_id
     
-    # Simple in-memory session persistence for demo (in prod use DB)
+    # 1. Fetch History from DB (Stateless Context)
+    history = await db.intake_chats.find({"session_id": session_id}).sort("created_at", 1).to_list(20)
+    
+    # Format History for Context
+    context_str = "Conversation History:\n"
+    for msg in history:
+        role = "AI" if msg["role"] == "assistant" else "Homeowner"
+        context_str += f"{role}: {msg['content']}\n"
+    
+    # 2. Initialize/Get Chat Instance
     if session_id not in chat_instances:
         chat_instances[session_id] = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=session_id,
             system_message=INTAKE_SYSTEM_PROMPT
-        )
+        ).with_model("openai", "gpt-5.2")
     
     chat = chat_instances[session_id]
     
@@ -651,10 +785,15 @@ async def intake_chat(data: ChatRequest):
     })
     
     try:
-        response = await chat.send_message(UserMessage(text=data.message))
+        # 3. Send Message with FULL CONTEXT
+        full_prompt = f"{context_str}\nHomeowner (Current): {data.message}\n(Respond naturally as the Intake Coordinator based on the history)"
+        
+        logger.info(f"Sending chat message for session {session_id}")
+        response = await chat.send_message(UserMessage(text=full_prompt))
+        logger.info("Chat response received")
     except Exception as e:
-        logger.error(f"Chat error: {e}")
-        raise HTTPException(status_code=500, detail="AI service unavailable")
+        logger.error(f"Chat error details: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
     
     # Store assistant msg
     await db.intake_chats.insert_one({
@@ -667,22 +806,25 @@ async def intake_chat(data: ChatRequest):
     
     is_complete = "COMPLETE:" in response
     lead_id = None
+    summary = None
     
     if is_complete:
+        summary = await generate_intake_summary(session_id)
+        if not summary:
+            summary = response.replace("COMPLETE:", "").strip()
+        
         lead_id = str(uuid.uuid4())
         await db.leads.insert_one({
             "id": lead_id,
             "session_id": session_id,
             "status": "pending_match",
             "source": "ai_intake",
-            "chat_summary": response.replace("COMPLETE:", "").strip(),
+            "chat_summary": summary,
             "created_at": datetime.now(timezone.utc).isoformat(),
-            # Placeholder data - normally extracted
             "name": "Homeowner (AI Intake)", 
             "city": "Unknown", "state": "Unknown", "project_type": "Unknown"
         })
         
-        # Run Auto-Match Logic
         matches = await db.contractors.find({"plan": "pro"}, {"_id": 0, "id": 1, "company_name": 1, "city": 1, "state": 1}).to_list(3)
         if not matches:
              matches = await db.contractors.find({}, {"_id": 0, "id": 1, "company_name": 1}).to_list(3)
@@ -692,7 +834,7 @@ async def intake_chat(data: ChatRequest):
             {"$set": {"ai_matches": matches}}
         )
 
-    return {"response": response, "session_id": session_id, "is_complete": is_complete, "lead_id": lead_id}
+    return {"response": response, "session_id": session_id, "is_complete": is_complete, "lead_id": lead_id, "summary": summary}
 
 @api_router.post("/intake/upload")
 async def upload_file(session_id: str = Form(...), file: UploadFile = File(...)):
@@ -706,6 +848,35 @@ async def upload_file(session_id: str = Form(...), file: UploadFile = File(...))
             
         file_url = f"{os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:8001')}/uploads/{filename}"
         
+        # Run Vision Analysis
+        analysis_result = await analyze_image_with_gpt4o(file_url)
+        
+        # PERSIST Upload Event to Database so Chat History knows about it!
+        system_msg_content = f"[System: User uploaded file: {file_url}. Analysis: {analysis_result}]"
+        
+        await db.intake_chats.insert_one({
+            "id": str(uuid.uuid4()),
+            "session_id": session_id,
+            "role": "user", # Treat as user action for context
+            "content": system_msg_content,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+
+        # Inject file info into active chat instance if exists
+        if session_id in chat_instances:
+            chat = chat_instances[session_id]
+            # Send context silently or as system prompt update if possible, 
+            # but LlmChat is session based. Sending a user message with system info is a workaround.
+            # Ideally, we just append to history and let the NEXT user message trigger the response.
+            # But the user expects a reply to the upload.
+            
+            # Let's trigger an IMMEDIATE AI response to the upload!
+            # The AI should see the analysis and comment on it.
+            
+            # Update: We want the AI to "continue answering questions".
+            # So we just log it. When the user says "What do you think?", the AI reads history.
+            pass
+
         # Send Email Notification
         email_sent = send_email_notification(
             subject=f"New Blueprints Uploaded - Session {session_id[:8]}",
@@ -1417,9 +1588,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

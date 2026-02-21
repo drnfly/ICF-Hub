@@ -1,5 +1,7 @@
 # ICF Hub - PRD
 
+Last Updated: 2026-02-20
+
 ## Problem Statement
 User with 10 years ICF construction experience wants a platform to generate revenue. Chose: ICF Education & Marketing Hub with both-sides marketplace model, AI features, and modern/bold design.
 
@@ -43,9 +45,13 @@ User with 10 years ICF construction experience wants a platform to generate reve
 - **Notification System** — In-app notifications triggered on new leads and post publishing, with unread count badge, mark read/all read
 - **Connect Social Media** — Settings page to link Facebook, Instagram, LinkedIn, X/Twitter, TikTok accounts with API tokens. Connection summary dashboard. Calendar shows auto-post status per platform. Publish flow checks connected accounts.
 
+## What's Been Implemented (Mar 2026)
+- Stabilized AI intake assistant by fixing logger initialization order, moving vision import to top-level, and switching intake chat + vision to GPT-5.2.
+- Auto-saved intake summary on completion (bullet list with blueprint insights) displayed to homeowner and stored on lead records.
+
 ## Prioritized Backlog
 ### P0
-- Stripe payment integration for contractor subscriptions
+- HubSpot OAuth redirect reliability (requires user to update Redirect URL and confirm callback)
 - Implement real social media API posting (Facebook Graph, LinkedIn, X APIs) using stored tokens
 - Real email notifications via SendGrid/Resend (currently in-app only)
 
@@ -60,3 +66,8 @@ User with 10 years ICF construction experience wants a platform to generate reve
 - SMS notifications via Twilio
 - A/B testing for social media content
 - White-label options for contractors
+
+## Next Tasks
+- Confirm HubSpot Redirect URL update and validate OAuth callback flow
+- Implement real social media posting APIs (Facebook Graph, LinkedIn, X)
+- Configure SendGrid/Resend for real email notifications
