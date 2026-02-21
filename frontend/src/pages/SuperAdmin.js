@@ -133,7 +133,7 @@ export default function SuperAdmin() {
           </TabsList>
 
           <TabsContent value="leads" data-testid="admin-leads-tab">
-            <Card data-testid="admin-leads-card">
+            <Card className="bg-secondary/30" data-testid="admin-leads-card">
               <Table data-testid="admin-leads-table">
                 <TableHeader>
                   <TableRow>
@@ -164,7 +164,7 @@ export default function SuperAdmin() {
           </TabsContent>
 
           <TabsContent value="users" data-testid="admin-users-tab">
-            <Card data-testid="admin-users-card">
+            <Card className="bg-secondary/30" data-testid="admin-users-card">
               <Table data-testid="admin-users-table">
                 <TableHeader>
                   <TableRow>
@@ -194,7 +194,7 @@ export default function SuperAdmin() {
           </TabsContent>
 
           <TabsContent value="payments" data-testid="admin-payments-tab">
-            <Card data-testid="admin-payments-card">
+            <Card className="bg-secondary/30" data-testid="admin-payments-card">
               <Table data-testid="admin-payments-table">
                 <TableHeader>
                   <TableRow>
