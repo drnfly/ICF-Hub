@@ -56,7 +56,7 @@ export default function SuperAdmin() {
   if (!auth) {
     return (
       <div className="pt-24 min-h-screen flex items-center justify-center bg-secondary/30" data-testid="admin-login-page">
-        <Card className="w-full max-w-sm bg-secondary/30" data-testid="admin-login-card">
+        <Card className="w-full max-w-sm" data-testid="admin-login-card">
           <CardHeader>
             <CardTitle className="text-center" data-testid="admin-login-title">Admin Login</CardTitle>
           </CardHeader>
@@ -95,7 +95,7 @@ export default function SuperAdmin() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8" data-testid="admin-stats-grid">
-          <Card className="bg-secondary/30" data-testid="admin-stat-total-revenue">
+          <Card data-testid="admin-stat-total-revenue">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium" data-testid="admin-stat-total-revenue-label">Total Revenue</CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
@@ -104,7 +104,7 @@ export default function SuperAdmin() {
               <div className="text-2xl font-bold" data-testid="admin-stat-total-revenue-value">${data.stats.totalRevenue?.toFixed(2)}</div>
             </CardContent>
           </Card>
-          <Card className="bg-secondary/30" data-testid="admin-stat-pending-leads">
+          <Card data-testid="admin-stat-pending-leads">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium" data-testid="admin-stat-pending-leads-label">Pending Leads</CardTitle>
               <MessageSquare className="h-4 w-4 text-muted-foreground" />
@@ -113,7 +113,7 @@ export default function SuperAdmin() {
               <div className="text-2xl font-bold" data-testid="admin-stat-pending-leads-value">{data.stats.activeLeads}</div>
             </CardContent>
           </Card>
-          <Card className="bg-secondary/30" data-testid="admin-stat-pro-contractors">
+          <Card data-testid="admin-stat-pro-contractors">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium" data-testid="admin-stat-pro-contractors-label">Pro Contractors</CardTitle>
               <Shield className="h-4 w-4 text-muted-foreground" />
