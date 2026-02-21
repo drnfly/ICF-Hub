@@ -49,6 +49,7 @@ User with 10 years ICF construction experience wants a platform to generate reve
 - Stabilized AI intake assistant by fixing logger initialization order, moving vision import to top-level, and switching intake chat + vision to GPT-5.2.
 - Auto-saved intake summary on completion (bullet list with blueprint insights) displayed to homeowner and stored on lead records.
 - Added Admin Inventory Portal button to access external inventory app.
+- Updated main site background to match Super Admin gray tone.
 - Aligned Super Admin dashboard cards/tables with gray background styling.
 
 ## Prioritized Backlog
