@@ -40,7 +40,8 @@
         @apply border-border;
     }
     body {
-        @apply bg-background text-foreground;
+        @apply text-foreground;
+        background-color: hsl(var(--secondary) / 0.3);
         font-family: 'Manrope', sans-serif;
     }
     h1, h2, h3 {

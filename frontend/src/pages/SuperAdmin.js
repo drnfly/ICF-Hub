@@ -55,10 +55,10 @@ export default function SuperAdmin() {
 
   if (!auth) {
     return (
-      <div className="pt-24 min-h-screen flex items-center justify-center bg-secondary/30">
-        <Card className="w-full max-w-sm">
+      <div className="pt-24 min-h-screen flex items-center justify-center bg-secondary/30" data-testid="admin-login-page">
+        <Card className="w-full max-w-sm" data-testid="admin-login-card">
           <CardHeader>
-            <CardTitle className="text-center">Admin Login</CardTitle>
+            <CardTitle className="text-center" data-testid="admin-login-title">Admin Login</CardTitle>
           </CardHeader>
           <CardContent>
             <Input 
@@ -67,8 +67,9 @@ export default function SuperAdmin() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               className="mb-4"
+              data-testid="admin-login-password-input"
             />
-            <Button className="w-full" onClick={checkAuth}>Login</Button>
+            <Button className="w-full" onClick={checkAuth} data-testid="admin-login-submit-button">Login</Button>
           </CardContent>
         </Card>
       </div>
@@ -76,78 +77,85 @@ export default function SuperAdmin() {
   }
 
   return (
-    <div className="pt-24 min-h-screen bg-secondary/30 p-6">
+    <div className="pt-24 min-h-screen bg-secondary/30 p-6" data-testid="admin-dashboard-page">
       <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold" style={{ fontFamily: "'Clash Display', sans-serif" }}>
+        <div className="flex flex-wrap gap-3 justify-between items-center mb-8" data-testid="admin-dashboard-header">
+          <h1 className="text-3xl font-bold" style={{ fontFamily: "'Clash Display', sans-serif" }} data-testid="admin-dashboard-title">
             Super Admin <span className="text-primary">Dashboard</span>
           </h1>
-          <Button variant="outline" onClick={() => setAuth(false)}>Logout</Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" data-testid="admin-inventory-portal-button">
+              <a href="https://inventory-app-nine-kappa.vercel.app/" target="_blank" rel="noopener noreferrer">
+                Open Inventory Portal
+              </a>
+            </Button>
+            <Button variant="outline" onClick={() => setAuth(false)} data-testid="admin-logout-button">Logout</Button>
+          </div>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8" data-testid="admin-stats-grid">
+          <Card data-testid="admin-stat-total-revenue">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+              <CardTitle className="text-sm font-medium" data-testid="admin-stat-total-revenue-label">Total Revenue</CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${data.stats.totalRevenue?.toFixed(2)}</div>
+              <div className="text-2xl font-bold" data-testid="admin-stat-total-revenue-value">${data.stats.totalRevenue?.toFixed(2)}</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card data-testid="admin-stat-pending-leads">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending Leads</CardTitle>
+              <CardTitle className="text-sm font-medium" data-testid="admin-stat-pending-leads-label">Pending Leads</CardTitle>
               <MessageSquare className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{data.stats.activeLeads}</div>
+              <div className="text-2xl font-bold" data-testid="admin-stat-pending-leads-value">{data.stats.activeLeads}</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card data-testid="admin-stat-pro-contractors">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pro Contractors</CardTitle>
+              <CardTitle className="text-sm font-medium" data-testid="admin-stat-pro-contractors-label">Pro Contractors</CardTitle>
               <Shield className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{data.stats.proContractors}</div>
+              <div className="text-2xl font-bold" data-testid="admin-stat-pro-contractors-value">{data.stats.proContractors}</div>
             </CardContent>
           </Card>
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="leads" className="w-full">
-          <TabsList className="mb-6">
-            <TabsTrigger value="leads">Intake Leads</TabsTrigger>
-            <TabsTrigger value="users">Users & Contractors</TabsTrigger>
-            <TabsTrigger value="payments">Transactions</TabsTrigger>
+        <Tabs defaultValue="leads" className="w-full" data-testid="admin-tabs">
+          <TabsList className="mb-6" data-testid="admin-tabs-list">
+            <TabsTrigger value="leads" data-testid="admin-tab-leads">Intake Leads</TabsTrigger>
+            <TabsTrigger value="users" data-testid="admin-tab-users">Users & Contractors</TabsTrigger>
+            <TabsTrigger value="payments" data-testid="admin-tab-payments">Transactions</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="leads">
-            <Card>
-              <Table>
+          <TabsContent value="leads" data-testid="admin-leads-tab">
+            <Card data-testid="admin-leads-card">
+              <Table data-testid="admin-leads-table">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Summary</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Source</TableHead>
+                    <TableHead data-testid="admin-leads-header-date">Date</TableHead>
+                    <TableHead data-testid="admin-leads-header-name">Name</TableHead>
+                    <TableHead data-testid="admin-leads-header-summary">Summary</TableHead>
+                    <TableHead data-testid="admin-leads-header-status">Status</TableHead>
+                    <TableHead data-testid="admin-leads-header-source">Source</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.leads.map((lead) => (
-                    <TableRow key={lead.id}>
-                      <TableCell>{new Date(lead.created_at).toLocaleDateString()}</TableCell>
-                      <TableCell>{lead.name || "Anonymous"}</TableCell>
-                      <TableCell className="max-w-md truncate">{lead.chat_summary || "No summary"}</TableCell>
-                      <TableCell>
-                        <Badge variant={lead.status === 'connected' ? "default" : "secondary"}>
+                  {data.leads.map((lead, index) => (
+                    <TableRow key={lead.id} data-testid={`admin-lead-row-${index}`}>
+                      <TableCell data-testid={`admin-lead-date-${index}`}>{new Date(lead.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell data-testid={`admin-lead-name-${index}`}>{lead.name || "Anonymous"}</TableCell>
+                      <TableCell className="max-w-md truncate" data-testid={`admin-lead-summary-${index}`}>{lead.chat_summary || "No summary"}</TableCell>
+                      <TableCell data-testid={`admin-lead-status-${index}`}>
+                        <Badge variant={lead.status === 'connected' ? "default" : "secondary"} data-testid={`admin-lead-status-badge-${index}`}>
                           {lead.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{lead.source}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground" data-testid={`admin-lead-source-${index}`}>{lead.source}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -155,29 +163,29 @@ export default function SuperAdmin() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="users">
-            <Card>
-              <Table>
+          <TabsContent value="users" data-testid="admin-users-tab">
+            <Card data-testid="admin-users-card">
+              <Table data-testid="admin-users-table">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Company / Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Plan</TableHead>
-                    <TableHead>Joined</TableHead>
+                    <TableHead data-testid="admin-users-header-company">Company / Name</TableHead>
+                    <TableHead data-testid="admin-users-header-email">Email</TableHead>
+                    <TableHead data-testid="admin-users-header-role">Role</TableHead>
+                    <TableHead data-testid="admin-users-header-plan">Plan</TableHead>
+                    <TableHead data-testid="admin-users-header-joined">Joined</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.users.map((u) => (
-                    <TableRow key={u.id}>
-                      <TableCell>{u.company_name || u.name || "Unknown"}</TableCell>
-                      <TableCell>{u.email}</TableCell>
-                      <TableCell>{u.company_name ? "Contractor" : "Homeowner"}</TableCell>
-                      <TableCell>
-                        {u.plan === 'pro' && <Badge>PRO</Badge>}
-                        {u.plan === 'free' && <Badge variant="outline">FREE</Badge>}
+                  {data.users.map((u, index) => (
+                    <TableRow key={u.id} data-testid={`admin-user-row-${index}`}>
+                      <TableCell data-testid={`admin-user-company-${index}`}>{u.company_name || u.name || "Unknown"}</TableCell>
+                      <TableCell data-testid={`admin-user-email-${index}`}>{u.email}</TableCell>
+                      <TableCell data-testid={`admin-user-role-${index}`}>{u.company_name ? "Contractor" : "Homeowner"}</TableCell>
+                      <TableCell data-testid={`admin-user-plan-${index}`}>
+                        {u.plan === 'pro' && <Badge data-testid={`admin-user-plan-pro-${index}`}>PRO</Badge>}
+                        {u.plan === 'free' && <Badge variant="outline" data-testid={`admin-user-plan-free-${index}`}>FREE</Badge>}
                       </TableCell>
-                      <TableCell>{new Date(u.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell data-testid={`admin-user-joined-${index}`}>{new Date(u.created_at).toLocaleDateString()}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -185,28 +193,28 @@ export default function SuperAdmin() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="payments">
-            <Card>
-              <Table>
+          <TabsContent value="payments" data-testid="admin-payments-tab">
+            <Card data-testid="admin-payments-card">
+              <Table data-testid="admin-payments-table">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Plan ID</TableHead>
+                    <TableHead data-testid="admin-payments-header-date">Date</TableHead>
+                    <TableHead data-testid="admin-payments-header-amount">Amount</TableHead>
+                    <TableHead data-testid="admin-payments-header-status">Status</TableHead>
+                    <TableHead data-testid="admin-payments-header-plan">Plan ID</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.payments.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell>{new Date(p.created_at).toLocaleDateString()}</TableCell>
-                      <TableCell>${p.amount}</TableCell>
-                      <TableCell>
-                        <Badge variant={p.payment_status === 'paid' ? "default" : "destructive"}>
+                  {data.payments.map((p, index) => (
+                    <TableRow key={p.id} data-testid={`admin-payment-row-${index}`}>
+                      <TableCell data-testid={`admin-payment-date-${index}`}>{new Date(p.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell data-testid={`admin-payment-amount-${index}`}>${p.amount}</TableCell>
+                      <TableCell data-testid={`admin-payment-status-${index}`}>
+                        <Badge variant={p.payment_status === 'paid' ? "default" : "destructive"} data-testid={`admin-payment-status-badge-${index}`}>
                           {p.payment_status || p.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-xs font-mono">{p.plan_id}</TableCell>
+                      <TableCell className="text-xs font-mono" data-testid={`admin-payment-plan-${index}`}>{p.plan_id}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
