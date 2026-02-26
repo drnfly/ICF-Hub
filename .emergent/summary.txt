@@ -1,176 +1,556 @@
 <analysis>**original_problem_statement:**
-The user, with 10 years of experience in ICF Construction, wants to create a successful app or website to generate income. They are open to ideas related to their field, such as marketing or lead generation, or exploring a completely new, innovative concept.
-
-Based on user choices, the project is an ICF Hub - an Education & Lead Generation Platform.
+The user, an ICF Construction expert, aims to create an income-generating application called ICF Hub. This platform will serve as an educational and lead-generation tool.
 
 PRODUCT REQUIREMENTS:
-- A modern and bold design to attract users.
-- An AI-powered chatbot for answering ICF-related questions and providing cost estimations.
-- A two-sided marketplace where contractors can subscribe to find leads, and homeowners can get connected with contractors.
-- AI agents for creating SEO-relevant content for social media and managing marketing campaigns.
-- Features for lead scoring, auto-scheduling content, an analytics dashboard, and a content calendar.
-- The ability for contractors to connect their social media accounts for automated posting.
+- A modern and bold design.
+- An AI-powered chatbot for answering ICF questions and providing cost estimations.
+- A two-sided marketplace for contractors (subscription-based) and homeowners.
+- AI agents for generating SEO-relevant content and managing marketing campaigns.
+- Features for lead scoring, content auto-scheduling, an analytics dashboard, and a content calendar.
+- Integration for contractors to connect social media accounts for automated posting.
+- Monetization tiers for both contractors and homeowners.
+- AI capability to analyze user-uploaded building plans (blueprints).
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack ICF Hub application has been developed. The backend is built with FastAPI and MongoDB, providing APIs for user authentication, lead management, and various AI-powered services. The frontend is a React application using Tailwind CSS and Shadcn UI components, featuring a comprehensive dashboard for contractors.
-
-Key implemented features include:
-- User registration and login for contractors.
-- AI Chatbot, AI Content/Campaign Generation, and AI Lead Scoring.
-- A content calendar with post-scheduling capabilities.
-- An analytics dashboard displaying key metrics with charts.
-- A settings page for connecting social media accounts (mocked functionality).
-- The UI has been repeatedly customized with user-provided images.
+A full-stack application with a FastAPI backend, MongoDB database, and a React frontend. The application includes:
+- **Contractor-facing features:** User authentication, a dashboard, AI content/campaign generation tools, a content calendar, an analytics page, and Stripe integration for a Pro subscription plan.
+- **Homeowner-facing features:** A lead intake page () with an AI assistant that features voice input/output and is intended to analyze uploaded building plans. It implements a paywall after a set number of free interactions.
+- **Admin features:** A password-protected Super Admin dashboard () to view leads, users, and transactions.
+- **Integrations:** Stripe for payments, HubSpot for CRM (partially functional), SendGrid for emails (not configured), and OpenAI (via Emergent LLM Key) for chat and vision.
 
 **Last working item**:
-- **Last item agent was working:** The user requested to set a specific image as the second picture on the Why ICF page.
-- **Status:** IN PROGRESS
+- **Last item agent was working:** Debugging the AI intake assistant, which becomes unresponsive after the user provides their initial information. The user reported that the chat shows thinking dots but never replies. The agent was repeatedly trying to execute a test script (), but each attempt resulted in a  error, indicating the backend process is hanging.
+- **Status:** BLOCKED
 - **Agent Testing Done:** N
-- **Which testing method agent to use?** screenshot tool. After making the change, the agent should take a screenshot of the  page to verify the correct image is displayed in the second position.
+- **Which testing method agent to use?** **troubleshoot_agent**. The agent is stuck in a repeating failure loop with timeouts. It cannot diagnose the hanging process on its own and requires the troubleshooter to analyze logs and the application state to identify the root cause.
 - **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
-- **Issue 1 (P0):** Complete the user's last request to change an image.
+- **Issue 1 (P0): AI intake assistant is unresponsive and causing backend to hang.**
+- **Issue 2 (P1): HubSpot connection flow leads to a blank page.**
 
-  **Issues Detail:**
-  - **Issue 1: Finalize image replacement on the 'Why ICF' page.**
-     - **Attempted fixes:** The agent has prepared the  tool call to update the image source in  but has not executed it yet.
-     - **Next debug checklist:**
-       1. Execute the pending  command.
-       2. Verify the change by taking a screenshot of the  page.
-     - **Why fix this issue and what will be achieved with the fix?** This will complete the user's direct request, ensuring the website's visual content matches their preference.
-     - **Status:** IN PROGRESS
-     - **Is recurring issue?** N
-     - **Should Test frontend/backend/both after fix?** Frontend
-     - **Blocked on other issue:** None
+**Issues Detail:**
+- **Issue 1: AI intake assistant is unresponsive and causing backend to hang.**
+    - **Attempted fixes:** The agent made numerous changes to the chat logic in , including refactoring to a stateless model, modifying Python imports, and adding a  module. The final attempts involved creating a test script () that consistently times out, proving the backend is locking up when the chat endpoint is called.
+    - **Next debug checklist:**
+        1. **Immediately call the **. The current approach is not working and is wasting time. The troubleshooter is required to diagnose the timeout and the hanging backend process.
+        2. Examine the  endpoint logic in  and the  function in  for potential infinite loops, deadlocks, or unhandled exceptions in the interaction with the LLM service.
+        3. Check backend supervisor logs (==> /var/log/supervisor/backend.err.log <==
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m04:57:22 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 04:57:22,727 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m04:57:25 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 04:57:25,451 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m04:57:26 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 04:57:26,239 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m04:57:46 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 04:57:46,248 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m04:57:47 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 04:57:47,859 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m04:57:53 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 04:57:53,164 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m04:57:53 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 04:57:53,819 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m04:57:59 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 04:57:59,757 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m04:58:00 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 04:58:00,602 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m04:58:03 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 04:58:03,290 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m04:58:04 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 04:58:04,130 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m04:58:22 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 04:58:22,847 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m04:58:23 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 04:58:23,640 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m04:58:27 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 04:58:27,512 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m04:58:28 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 04:58:28,266 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m04:58:31 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 04:58:31,623 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m04:58:32 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 04:58:32,422 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m05:00:07 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 05:00:07,572 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m05:00:08 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 05:00:08,327 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m05:00:12 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 05:00:12,789 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m05:00:13 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 05:00:13,734 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m05:00:21 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 05:00:21,092 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m05:00:21 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 05:00:21,823 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m05:00:49 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 05:00:49,238 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m05:00:50 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 05:00:50,232 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m05:00:53 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 05:00:53,681 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m05:00:54 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 05:00:54,518 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m05:00:57 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 05:00:57,403 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m05:00:57 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 05:00:57,894 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [535]
+INFO:     Started server process [770]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+[92m05:03:48 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 05:03:48,693 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m05:03:50 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 05:03:50,160 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m05:04:09 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 05:04:09,225 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m05:04:10 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 05:04:10,918 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m05:04:29 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 05:04:29,754 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m05:04:30 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 05:04:30,441 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m05:04:43 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 05:04:43,597 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m05:04:45 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 05:04:45,633 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [770]
+INFO:     Started server process [798]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+[92m05:07:26 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 05:07:26,195 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m05:07:27 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 05:07:27,461 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m05:07:38 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 05:07:38,647 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m05:07:39 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 05:07:39,894 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m05:07:44 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 05:07:44,953 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m05:07:45 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 05:07:45,802 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m05:07:56 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 05:07:56,449 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m05:07:57 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 05:07:57,764 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m05:08:10 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 05:08:10,101 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m05:08:11 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 05:08:11,130 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m05:08:46 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 05:08:46,282 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m05:08:49 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 05:08:49,663 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m05:10:19 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 05:10:19,444 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m05:10:23 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 05:10:23,769 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+WARNING:  WatchFiles detected changes in 'vision_helper.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [798]
+WARNING:  WatchFiles detected changes in 'server.py', 'vision_helper.py'. Reloading...
+INFO:     Started server process [893]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+[92m05:13:26 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 05:13:26,568 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m05:13:27 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 05:13:27,745 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m05:13:39 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 05:13:39,358 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m05:13:40 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 05:13:40,172 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+[92m05:13:44 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gpt-4o; provider = openai
+2026-02-20 05:13:44,101 - LiteLLM - INFO - 
+LiteLLM completion() model= gpt-4o; provider = openai
+[92m05:13:44 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2026-02-20 05:13:44,904 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+WARNING:  WatchFiles detected changes in 'vision_helper.py'. Reloading...
+INFO:     Will watch for changes in these directories: ['/app/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [41] using WatchFiles
+
+==> /var/log/supervisor/backend.out.log <==
+INFO:     10.208.128.134:55352 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:55352 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:55352 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:48604 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:48856 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:48596 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:48596 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.169.227:48596 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:48596 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.169.227:48602 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.169.227:48602 - "GET /api/leads HTTP/1.1" 200 OK
+INFO:     10.208.169.227:48608 - "GET /api/contractors/me/profile HTTP/1.1" 200 OK
+INFO:     10.208.128.134:51134 - "GET /api/notifications HTTP/1.1" 200 OK
+INFO:     10.208.169.227:48608 - "GET /api/leads HTTP/1.1" 200 OK
+INFO:     10.208.169.227:48608 - "GET /api/notifications HTTP/1.1" 200 OK
+INFO:     10.208.169.227:48602 - "GET /api/contractors/me/profile HTTP/1.1" 200 OK
+INFO:     10.208.128.134:51134 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:48608 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:45408 - "POST /api/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:35670 - "POST /api/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:45908 - "GET /api/contractors HTTP/1.1" 200 OK
+INFO:     10.208.128.134:59780 - "GET /api/contractors HTTP/1.1" 200 OK
+INFO:     10.208.169.227:57518 - "GET /api/contractors HTTP/1.1" 200 OK
+INFO:     10.208.169.227:57518 - "GET /api/contractors HTTP/1.1" 200 OK
+INFO:     10.208.128.134:47100 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:47100 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:53342 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.169.227:58474 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:53342 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.169.227:58474 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:42928 - "GET /api/admin/leads HTTP/1.1" 200 OK
+INFO:     10.208.128.134:53938 - "GET /api/admin/users HTTP/1.1" 404 Not Found
+INFO:     10.208.169.227:42928 - "GET /api/admin/payments HTTP/1.1" 404 Not Found
+INFO:     10.208.169.227:35756 - "GET /api/contractors HTTP/1.1" 200 OK
+INFO:     10.208.169.227:35756 - "GET /api/contractors HTTP/1.1" 200 OK
+INFO:     10.208.128.134:40246 - "POST /api/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:36764 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:46760 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:48834 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:44270 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:45310 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:33184 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:43786 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:43786 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:42052 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:42612 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:59356 - "POST /api/intake/upload HTTP/1.1" 200 OK
+INFO:     10.208.169.227:40294 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:41114 - "GET /api/contractors HTTP/1.1" 200 OK
+INFO:     10.208.169.227:46286 - "GET /api/contractors HTTP/1.1" 200 OK
+INFO:     10.208.169.227:45512 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.169.227:45512 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:45512 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.169.227:45512 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:50216 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:35040 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.169.227:35052 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:48392 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:48392 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:35052 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:48392 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:41850 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:41850 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:49830 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:49842 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:39934 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:39934 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:44560 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:44056 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:41668 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:41668 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.169.227:44056 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:58450 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:58716 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:53066 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:41336 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:43140 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:43126 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:45854 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:45854 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.169.227:33900 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:33900 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.169.227:33900 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:43890 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.169.227:33900 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:43890 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:33908 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:54244 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:33908 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:43618 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:50488 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:60732 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:57244 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:42448 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:33198 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:33210 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:60582 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:60592 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:34820 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:38488 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:40430 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:52270 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:33426 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:40038 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:44802 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:45044 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:45044 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:43314 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:43314 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:38586 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:44904 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:37342 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:60942 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:51924 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:51686 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:51686 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:41720 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:41720 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:51334 - "POST /api/intake/upload HTTP/1.1" 200 OK
+INFO:     10.208.128.134:47108 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.169.227:51336 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:47114 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:47114 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:47108 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:51336 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:47126 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:47126 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:47518 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:33938 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:44460 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:44460 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:44460 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:59606 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:59608 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:59608 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:59606 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:59606 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:57986 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:52226 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:52232 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:52232 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:58076 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:58080 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:58080 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:58076 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:58076 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:54750 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:54752 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:48566 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:48566 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:55518 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:55518 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:34798 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:40004 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:40004 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:40004 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:40004 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:40018 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:37826 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:37826 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:40018 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:39804 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:39804 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:37836 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:56904 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:56904 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:58760 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:58760 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:58760 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:58760 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:52732 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:54530 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:33044 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:58904 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:58920 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:58920 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:58904 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:51470 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:51486 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:51486 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:51470 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.169.227:56474 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:53664 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:45152 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:40562 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:40570 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:40570 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:40570 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:56234 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:49128 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:47342 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:33466 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:33456 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:33456 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:33456 - "GET /api/notifications/unread-count HTTP/1.1" 200 OK
+INFO:     10.208.128.134:33476 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.169.227:37532 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     10.208.128.134:51088 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.128.134:36748 - "POST /api/intake/chat HTTP/1.1" 200 OK
+INFO:     10.208.169.227:40858 - "POST /api/intake/chat HTTP/1.1" 200 OK) for errors that occur when the timeout happens.
+    - **Why fix this issue and what will be achieved with the fix?** This is a critical lead-generation feature and the primary interaction point for homeowners. It is completely broken and is the highest priority to fix.
+    - **Status:** BLOCKED
+    - **Is recurring issue?** Y
+    - **Should Test frontend/backend/both after fix?** Both
+    - **Blocked on other issue:** None
+
+- **Issue 2: HubSpot connection flow leads to a blank page.**
+    - **Attempted fixes:** The agent identified a  URL was being used in the redirect. A fix was attempted by changing the redirect logic and adding a UI element to display the correct redirect URL for the user to manually copy into their HubSpot app configuration. It is not confirmed if the user has performed this manual step.
+    - **Next debug checklist:**
+        1. Confirm with the user if they have updated the Redirect URL in their HubSpot developer app settings with the URL displayed on the  page.
+        2. Review the  endpoint in  to ensure it correctly exchanges the authorization code for a token and then successfully redirects the user back to the frontend, preferably with a status indicator (e.g., ).
+    - **Why fix this issue and what will be achieved with the fix?** The HubSpot integration is key to the user's workflow for automatically logging contacts and sending AI-generated emails. It is currently unusable.
+    - **Status:** USER VERIFICATION PENDING
+    - **Is recurring issue?** Y
+    - **Should Test frontend/backend/both after fix?** Frontend
+    - **Blocked on other issue:** None
 
 **In progress Task List**:
-- **Task 1: Replace the second image on the 'Why ICF' page.**
-     - **Where to resume:** Execute the prepared  tool call targeting the second  tag in .
-     - **What will be achieved with this?** The 'Why ICF' page will be updated with the user's selected image, fulfilling their latest customization request.
-     - **Status:** IN PROGRESS
-     - **Should Test frontend/backend/both after fix?** Frontend
-     - **Blocked on something:** None
+- None.
 
 **Upcoming and Future Tasks**
-- **Future Tasks:**
-    - **P1: Implement real social media posting.** The current social media connection feature is a mock. The backend needs to be integrated with the actual APIs (Facebook, Instagram, etc.) to enable auto-posting of content from the calendar. This will involve using the stored user credentials to make API calls.
+- **P1: Implement real social media posting:** The current feature is a mock. This requires integrating with platform APIs (e.g., Facebook, Instagram) to enable the auto-posting functionality from the content calendar.
+- **P2: Integrate user's custom AI takeoff app:** The user plans to build a separate AI application for construction takeoffs and wants to integrate it as a feature for top-tier users.
+- **P3: Refactor the backend monolith ():** This file has grown to over 1300 lines and is becoming unmaintainable and prone to bugs. It needs to be broken down into separate feature-based routers (e.g., , , , ).
+- **P4: Refactor large frontend components:** Pages like  and  should be decomposed into smaller, reusable components to improve maintainability.
 
 **Completed work in this session**
-- **Initial App Scaffolding:** Built the foundational ICF Hub platform with a FastAPI backend and React frontend.
-- **Core Feature Implementation:**
-    - User Authentication (DONE) - , 
-    - AI Chatbot (DONE) - , 
-    - Landing & Static Pages (DONE) - , 
-- **AI-Powered Marketing Suite:**
-    - AI Content & Campaign Generation (DONE) - , 
-    - AI Lead Scoring (DONE) - , 
-- **Productivity & Management Tools:**
-    - Content Scheduling & Calendar (DONE) - , 
-    - Analytics Dashboard with  (DONE) - , 
-    - Lead & User Notifications (DONE) - , 
-- **Social Media Integration (Mock):**
-    - Created UI for connecting social accounts (DONE) - 
-    - Implemented backend endpoints to save credentials (DONE) - 
-- **UI/UX Iteration:**
-    - Added a Register button to the main navbar for easier access.
-    - Repeatedly updated site images and text based on user feedback and provided assets.
-    - Used CSS cropping to hide a watermark on a user-provided image.
+- Implemented Stripe integration for a paid contractor plan ().
+- Created a comprehensive, password-protected Super Admin dashboard ().
+- Implemented an AI-powered lead intake assistant with voice input/output and a homeowner paywall.
+- Added AI vision capabilities to the intake assistant to analyze uploaded plans.
+- Integrated HubSpot for CRM, including an OAuth flow and an AI Email/SMS generation tool.
+- Continuously refined UI and AI prompts based on frequent user feedback.
+- Fixed various bugs related to user authentication and chat functionality (before the current major failure).
 
 **Earlier issues found/mentioned but not fixed**
-- The testing agent reported several minor, low-priority issues during development (e.g., selector timeouts, cosmetic animation glitches). The main agent assessed these as non-blocking test automation artifacts or cosmetic and prioritized moving forward with core feature delivery. They do not appear to impact user-facing functionality.
+- The HubSpot connection requires the user to manually copy and paste a redirect URL into their HubSpot app settings. This is a brittle solution that will break if the preview URL changes.
 
 **Known issue recurrence from previous fork**
-- None.
+- The AI Intake Chat has been highly unstable throughout this session, experiencing multiple types of failures (resetting state, failing to respond, crashing). This is a new major recurring issue.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Frontend**: React, Tailwind CSS, Shadcn UI, Recharts
-- **Backend**: FastAPI, MongoDB (using  for async operations), JWT Authentication
-- **AI Integration**: Leverages  for OpenAI services (chatbot, content generation).
-- **Process Management**:  to manage backend and frontend services.
+- **Frontend**: React, Tailwind CSS, Shadcn UI, Recharts.
+- **Backend**: FastAPI, MongoDB (motor).
+- **AI**: OpenAI GPT-4o (Chat & Vision) via .
+- **Payments**: Stripe Checkout.
+- **CRM**: HubSpot REST API with OAuth 2.0.
+- **Voice**: Browser SpeechRecognition (STT) and SpeechSynthesis (TTS) APIs.
 
 **key DB schema**
-- **users**: 
-- **leads**: 
-- **posts**: 
-- **notifications**: 
-- **social_accounts**: 
+- **intake_chats**: 
+- **payments**: 
+- (Other collections: , , , , )
 
 **changes in tech stack**
-- No changes from the initial stack.
+- : Added for payment processing.
+- : Added for email sending (not yet configured with keys).
 
 **All files of reference**
-- : Monolithic backend file containing all API endpoints, database models, and business logic.
-- : The main React router, defining all application routes.
-- : The home page, which has undergone significant visual customization.
-- : The Why ICF page, also heavily customized with images.
-- : Central hub for logged-in contractor features.
-- : UI for the mocked social media connection feature.
+- : **(Most Critical File)** Contains the currently broken  endpoint.
+- : Frontend for the broken chat feature.
+- : Interacts with the vision model; a potential source of the backend hang.
+- : UI for the HubSpot integration and AI tools.
+- : UI for the admin dashboard.
 
 **Areas that need refactoring**:
-- **Backend Monolith**:  contains all application logic. It should be refactored into a more modular structure, using FastAPI's  to separate endpoints by feature (e.g., auth, leads, ai_tools).
-- **Frontend Components**: Large pages like  could be broken down into smaller, more manageable components to improve readability and reuse.
+- **:** This is a top priority. The monolithic structure is the root cause of the recent instability and debugging difficulties. It must be broken down into feature-specific  modules.
+- **/app/backend/temp_auth_logic.py**: This file was created and should be deleted.
 
 **key api endpoints**
-- 
-- 
-- 
-- 
-- 
-- 
-- 
-- 
--  (mocked)
--  (mocked)
+- : **(BROKEN/HANGING)** The endpoint for the AI assistant.
+- : Handles file uploads for the intake assistant.
+- : Initiates Stripe payment.
+- : Starts HubSpot OAuth flow.
+- : **(UNRELIABLE)** Handles the redirect from HubSpot.
+- : Endpoints for the Super Admin dashboard.
 
 **Critical Info for New Agent**
-- The user is highly engaged with the visual aspects of the website. Be prepared for frequent requests to change images, text, and layout.
-- The social media posting feature is **MOCKED**. While the UI allows connecting accounts and scheduling posts, no actual integration with social media APIs has been implemented. The backend only simulates the action. This is the most significant piece of incomplete functionality.
-- Reinforce security best practices: advise the user to enter API keys and sensitive information directly into the application's secure forms, not in the chat.
-- The agent has used CSS cropping to hide an image watermark. This might be a brittle solution.
+- **Your first action MUST be to call the .** The previous agent was stuck in a timeout loop trying to debug the unresponsive chat. Do not repeat this pattern. The backend is hanging, and you need the troubleshooter to diagnose why.
+- The AI Intake Chat is extremely unstable and is the user's main point of concern. Expect to spend significant time stabilizing this feature.
+- The user is very active and provides direct, frequent feedback. Be prepared to iterate quickly based on their reports.
+- The HubSpot connection is not fully resolved and depends on the user taking manual action in their HubSpot account.
 
 **documents and test reports created in this job**
-- 
-- 
-- 
-- 
-- 
-- 
+- A series of single-purpose test scripts were created (e.g., , , ). The latest, , is the one that fails with a timeout.
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  ** (IN PROGRESS):** User wants to set a new image on the 'Why ICF' page.
-2.   (Completed)
-3.   (Completed)
-4.   (Completed)
-5.   (Completed)
-6.   (Completed)
-7.   (Completed)
-8.   (Completed)
-9.   (Completed)
-10.  (Completed)
+- The last 10 messages are a repeated cycle of the user reporting that the intake assistant is not working in various ways (not responding, resetting, showing thinking dots forever), and asking for changes to its behavior. The core unresolved issue is: **still no response**.
 
 **Project Health Check:**
-- **Broken:** No core functionality is broken.
-- **Mocked:** The entire social media auto-posting functionality is mocked. The system saves credentials and marks posts as 'published' in the database but does not perform any real API calls to external platforms.
+- **Broken:** The core lead intake feature () is non-functional due to a hanging backend process.
+- **Mocked:** The social media auto-posting functionality remains a mock.
 
 **3rd Party Integrations**
-- **OpenAI GPT-5.2:** Used for chatbot, content/campaign generation, and lead scoring. Uses Emergent LLM Key.
-- **recharts:** A charting library used for the frontend Analytics Dashboard.
-- **Social Media APIs (Facebook, Instagram, etc.):** The UI and backend endpoints are in place, but the actual integration is NOT implemented. This will require user-provided keys.
+- **OpenAI GPT-4o:** Used for chat and vision via Emergent LLM Key.
+- **Stripe:** Used for payments (test key from environment).
+- **SendGrid:** Integrated but requires user API key to be functional.
+- **HubSpot:** Integrated but connection flow is unreliable and requires manual user setup.
 
 **Testing status**
-- **Testing agent used after significant changes:** YES
-- **Troubleshoot agent used after agent stuck in loop:** NO
-- **Test files created:** None. The testing agent was used for verification.
-- **Known regressions:** None.
+- **Testing agent used after significant changes:** NO
+- **Troubleshoot agent used after agent stuck in loop:** NO (This was a critical failure of the previous agent).
+- **Test files created:** [] and others.
+- **Known regressions:** The AI Intake Chat feature has severely regressed and is now completely broken.
 
 **Credentials to test flow:**
-New contractor accounts can be created via the registration form on the  page. No default credentials exist.
+- **Admin Portal:** Navigate to , Password: 
 
 **What agent forgot to execute**
-The agent prepared the  command for the user's most recent request (to change the second image on the Why ICF page) but did not execute it. This is the immediate pending action.</analysis>
+- The agent failed to call the  after getting stuck in a repeating loop of timeout errors for more than 10 tool calls. This is a direct violation of the mandatory instructions.
+- The agent created a temporary file  and never cleaned it up.</analysis>
