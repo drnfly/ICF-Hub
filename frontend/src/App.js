@@ -19,6 +19,7 @@ import AnalyticsDashboard from "@/pages/AnalyticsDashboard";
 import SocialSettings from "@/pages/SocialSettings";
 import EmailSMSGenerator from "@/pages/EmailSMSGenerator";
 import AdminLeads from "@/pages/AdminLeads";
+import ReviewBoard from "@/pages/ReviewBoard";
 
 function App() {
   return (
@@ -43,6 +44,7 @@ function App() {
             <Route path="/analytics" element={<AnalyticsDashboard />} />
             <Route path="/social" element={<SocialSettings />} />
             <Route path="/admin" element={<AdminLeads />} />
+            <Route path="/icf-preview/review-board" element={<ReviewBoard />} />
           </Routes>
         </main>
         <Footer />
