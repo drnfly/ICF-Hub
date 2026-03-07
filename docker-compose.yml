@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: icf-hub-mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: changeme
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - icf-network
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: icf-hub-backend
+    environment:
+      MONGO_URL: mongodb://admin:changeme@mongodb:27017/icfhub?authSource=admin
+      DB_NAME: icfhub
+      JWT_SECRET: icf-hub-jwt-secret-2024-xK9mP2vL
+      EMERGENT_LLM_KEY: ${EMERGENT_LLM_KEY}
+      STRIPE_API_KEY: ${STRIPE_API_KEY}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      ADMIN_EMAIL: admin@icfhub.local
+      CORS_ORIGINS: http://localhost:3000,http://localhost:80,http://187.124.66.30
+      REACT_APP_BACKEND_URL: http://localhost:8001
+    ports:
+      - "8001:8000"
+    depends_on:
+      - mongodb
+    networks:
+      - icf-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: icf-hub-frontend
+    environment:
+      REACT_APP_API_URL: http://localhost:8001/api
+      REACT_APP_BACKEND_URL: http://localhost:8001
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - icf-network
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
+
+networks:
+  icf-network:
+    driver: bridge
