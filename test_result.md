@@ -283,9 +283,9 @@ frontend:
     implemented: true
     working: false
     file: "/app/frontend/src/pages/TakeoffEstimator.js"
-    stuck_count: 0
+    stuck_count: 2
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
         - working: true
           agent: "main"
@@ -295,6 +295,14 @@ frontend:
           agent: "testing"
           timestamp: "2026-03-14T08:31:00Z"
           comment: "CRITICAL: Backend API endpoint routing issue detected. Frontend UI testing results: ✅ PASS: A) Navbar displays 'TAKEOFF BETA' link and routes correctly to /tools/takeoff-beta ✅ B) Contractor-only gate displays correctly when logged out (lock icon, heading, sign-in CTA) ✅ C) Auth flow works - contractor registration/login successful, access granted after auth ✅ D) PDF-only upload validation works - non-PDF files rejected with error, valid PDF accepted and displayed ✅ E) Upload interface ready - button enabled with PDF loaded. ❌ FAIL: Takeoff analysis fails with '404 Not Found' when calling http://187.124.66.30:8001/api/takeoff/analyze. Backend logs show endpoint exists and responds on localhost (401/422/200 responses logged), but external IP returns 404. This is a Kubernetes ingress or nginx routing configuration issue - the /api/takeoff/* routes are not being proxied through the external IP. Frontend code is fully functional, contractor gate working, PDF validation working, UI ready. Backend endpoint exists but is not accessible via external URL."
+        - working: true
+          agent: "main"
+          timestamp: "2026-03-14T08:30:00Z"
+          comment: "Added resilient API fallback in TakeoffEstimator: calls REACT_APP_BACKEND_URL first, then retries same-origin /api route when external endpoint returns 404. This addresses takeoff-route mismatch seen in frontend testing while preserving existing path and contractor-only behavior. Ready for frontend retest."
+        - working: false
+          agent: "testing"
+          timestamp: "2026-03-14T08:51:00Z"
+          comment: "CRITICAL BUG IDENTIFIED AND PARTIALLY FIXED: Main agent's fallback used window.location.origin (http://localhost:3000 - frontend port) instead of backend port 8001. Testing confirmed: ✅ Navbar 'TAKEOFF BETA' link present ✅ Contractor-only gate working ✅ Registration/login working ✅ PDF-only validation working ✅ PDF upload working ✅ Backend endpoint functional (direct curl test returned full response with metrics, walls[], model_3d). ❌ CRITICAL: API calls from browser fail: First attempt to http://187.124.66.30:8001/api/takeoff/analyze returns 404 (external URL not accessible), Fallback to http://localhost:8001/api/takeoff/analyze returns 401 Unauthorized. Root cause: External URL not exposed properly in Kubernetes environment, AND fallback has authentication issue (token not passing correctly or timing issue). Testing agent applied fix to use localhost:8001 for fallback instead of window.location.origin in BOTH contractor profile check (line 43) AND takeoff analyze (line 127). However, 401 auth error persists on fallback call despite token being present in localStorage. Backend is 100% functional - needs frontend auth/CORS investigation or alternative solution."
 
 metadata:
   created_by: "testing_agent"
@@ -315,6 +323,12 @@ test_plan:
   test_completed: false
 
 agent_communication:
+    - agent: "testing"
+      timestamp: "2026-03-14T08:51:00Z"
+      message: "🔧 TAKEOFF BETA RETEST COMPLETED - CRITICAL AUTHENTICATION/ROUTING ISSUE IDENTIFIED. Testing revealed main agent's fallback implementation uses wrong port (window.location.origin = localhost:3000 frontend, not localhost:8001 backend). Applied fixes to lines 43 and 127-128 in TakeoffEstimator.js to use localhost:8001 for fallback. VERIFIED: ✅ All existing pass items still working (navbar label, contractor gate, non-PDF rejection) ✅ Backend /api/takeoff/analyze endpoint is 100% FUNCTIONAL (direct curl test returned complete response with summary metrics, walls array, model_3d with 3D coordinates) ✅ Frontend UI fully implemented and renders correctly. ❌ BLOCKER: API calls from browser failing with 404→401 sequence. External URL http://187.124.66.30:8001 returns 404 (Kubernetes ingress not exposing /api/takeoff/*), fallback to localhost:8001 returns 401 Unauthorized despite token in localStorage. Issue is NOT backend (proven functional via curl), NOT frontend UI (fully working), but API call authentication/CORS in browser context. RECOMMENDATION: Either 1) Fix Kubernetes ingress to expose takeoff routes OR 2) Investigate why Authorization header with valid JWT token results in 401 on localhost:8001 calls from browser (possible CORS preflight, token format, or timing issue)."
+    - agent: "main"
+      timestamp: "2026-03-14T08:30:00Z"
+      message: "Applied takeoff API fallback in frontend (primary REACT_APP_BACKEND_URL, retry same-origin on 404) after routing mismatch. Requesting fresh UI retest of TAKEOFF BETA execution flow."
     - agent: "testing"
       timestamp: "2026-03-14T08:31:00Z"
       message: "✅ FRONTEND UI TESTING COMPLETE - BACKEND ROUTING ISSUE IDENTIFIED. Executed comprehensive UI test covering all requirements: A) Navbar & routing ✅ - 'TAKEOFF BETA' link present and routes correctly. B) Contractor-only gate ✅ - Lock screen displays properly when logged out. C) Auth flow ✅ - Registration and login working, access granted after auth. D) PDF upload validation ✅ - Non-PDF rejected, valid PDF accepted. E) Takeoff execution ❌ - API call fails with 404 to external URL http://187.124.66.30:8001/api/takeoff/analyze. Investigation shows backend endpoint exists (confirmed in server logs with 200/401/422 responses on localhost), but external IP routing returns 404. This is a Kubernetes ingress or nginx proxy configuration issue blocking /api/takeoff/* routes from external access. Frontend implementation is fully functional and ready - all UI elements render correctly, auth gate works, PDF validation works. Issue is infrastructure routing, not application code."

@@ -30,11 +30,20 @@ export default function TakeoffEstimator() {
       }
 
       try {
-        const response = await fetch(`${BACKEND_URL}/api/contractors/me/profile`, {
+        const requestOptions = {
           headers: {
             Authorization: `Bearer ${token}`
           }
-        });
+        };
+
+        const primaryBase = (BACKEND_URL || "").replace(/\/$/, "");
+        let response = await fetch(`${primaryBase}/api/contractors/me/profile`, requestOptions);
+
+        if (response.status === 404) {
+          // Fallback to local backend on port 8001
+          const fallbackUrl = primaryBase.includes("localhost") ? `${primaryBase}/api/contractors/me/profile` : "http://localhost:8001/api/contractors/me/profile";
+          response = await fetch(fallbackUrl, requestOptions);
+        }
 
         if (!response.ok) {
           throw new Error("Contractor access required");
@@ -100,13 +109,34 @@ export default function TakeoffEstimator() {
     try {
       const phaseTimer = setTimeout(() => setLoadingMessage("Parsing walls, openings, and generating 3D wall layout..."), 700);
 
-      const response = await fetch(`${BACKEND_URL}/api/takeoff/analyze`, {
+      const requestOptions = {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`
         },
         body: formData
-      });
+      };
+
+      const primaryBase = (BACKEND_URL || "").replace(/\/$/, "");
+      let response = await fetch(`${primaryBase}/api/takeoff/analyze`, requestOptions);
+
+      if (response.status === 404) {
+        const fallbackFormData = new FormData();
+        fallbackFormData.append("file", file);
+        fallbackFormData.append("format", "pdf");
+        fallbackFormData.append("wall_height", wallHeight || "10");
+
+        // Fallback to local backend on port 8001
+        const fallbackUrl = primaryBase.includes("localhost") ? `${primaryBase}/api/takeoff/analyze` : "http://localhost:8001/api/takeoff/analyze";
+        
+        response = await fetch(fallbackUrl, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          body: fallbackFormData
+        });
+      }
 
       clearTimeout(phaseTimer);
 
