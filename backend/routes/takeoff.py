@@ -9,8 +9,12 @@ import base64
 import jwt
 import fitz
 from typing import Any, Dict, List
-from dotenv import dotenv_values
+from dotenv import load_dotenv, dotenv_values
 from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+
+# Load environment variables for this module
+ROOT_DIR = Path(__file__).parent.parent
+load_dotenv(ROOT_DIR / '.env', override=False)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/takeoff")
@@ -18,7 +22,7 @@ router = APIRouter(prefix="/takeoff")
 UPLOAD_DIR = Path("/app/frontend/public/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-JWT_SECRET = os.environ.get("JWT_SECRET", "icf-hub-jwt-secret-2024-xK9mP2vL")
+JWT_SECRET = os.environ.get("JWT_SECRET")
 JWT_ALGORITHM = "HS256"
 
 
@@ -40,6 +44,9 @@ def load_llm_key() -> str:
 
 def get_optional_user_payload(authorization: str = Header(None)) -> Dict[str, Any] | None:
     if not authorization or not authorization.startswith("Bearer "):
+        return None
+
+    if not JWT_SECRET:
         return None
 
     token = authorization.split(" ", 1)[1].strip()

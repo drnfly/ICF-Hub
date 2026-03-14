@@ -38,7 +38,7 @@ async def generate_message(data: MessageGenerateRequest):
     if not EMERGENT_LLM_KEY:
         # Fallback to env var if not in process env (router import order can vary)
         from dotenv import load_dotenv
-        load_dotenv(Path(__file__).parent.parent / '.env', override=True)
+        load_dotenv(Path(__file__).parent.parent / '.env', override=False)
         EMERGENT_LLM_KEY = (os.environ.get('EMERGENT_LLM_KEY') or '').strip()
     
     if not EMERGENT_LLM_KEY:

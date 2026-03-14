@@ -24,7 +24,7 @@ from routes import takeoff
 from vision_helper import analyze_image_with_gpt4o
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env', override=True)
+load_dotenv(ROOT_DIR / '.env', override=False)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -37,7 +37,9 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-JWT_SECRET = "icf-hub-jwt-secret-2024-xK9mP2vL"
+JWT_SECRET = os.environ.get("JWT_SECRET")
+if not JWT_SECRET:
+    raise RuntimeError("JWT_SECRET is required in environment")
 JWT_ALGORITHM = "HS256"
 EMERGENT_LLM_KEY = (os.environ.get('EMERGENT_LLM_KEY') or '').strip()
 logger.info(f"EMERGENT_LLM_KEY loaded: {bool(EMERGENT_LLM_KEY)}, len: {len(EMERGENT_LLM_KEY)}")
@@ -46,9 +48,9 @@ SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY')
 ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL')
 
 # HubSpot Config
-HUBSPOT_CLIENT_ID = os.environ.get("HUBSPOT_CLIENT_ID", "a4e90530-6747-4810-a931-a342bd209f07")
-HUBSPOT_CLIENT_SECRET = os.environ.get("HUBSPOT_CLIENT_SECRET", "160b8440-80d7-49df-9f97-23fbb4f09712")
-HUBSPOT_REDIRECT_URI = os.environ.get("HUBSPOT_REDIRECT_URI", "http://localhost:8001/api/auth/hubspot/callback")
+HUBSPOT_CLIENT_ID = os.environ.get("HUBSPOT_CLIENT_ID")
+HUBSPOT_CLIENT_SECRET = os.environ.get("HUBSPOT_CLIENT_SECRET")
+HUBSPOT_REDIRECT_URI = os.environ.get("HUBSPOT_REDIRECT_URI")
 HUBSPOT_SCOPES = "crm.objects.contacts.read crm.objects.contacts.write" 
 
 app = FastAPI()
@@ -273,8 +275,13 @@ async def login(data: ContractorLogin):
 @api_router.get("/auth/hubspot/authorize")
 async def hubspot_authorize(user_id: str, redirect_uri: str = None):
     """Generates the HubSpot OAuth URL"""
-    # Use provided redirect_uri or fallback to env var (legacy behavior)
+    if not HUBSPOT_CLIENT_ID:
+        raise HTTPException(status_code=500, detail="HubSpot client ID not configured")
+
+    # Use provided redirect_uri or configured env value
     final_redirect_uri = redirect_uri or HUBSPOT_REDIRECT_URI
+    if not final_redirect_uri:
+        raise HTTPException(status_code=500, detail="HubSpot redirect URI not configured")
     
     import urllib.parse
     encoded_redirect = urllib.parse.quote(final_redirect_uri)
@@ -295,12 +302,22 @@ async def hubspot_authorize(user_id: str, redirect_uri: str = None):
 @api_router.get("/auth/hubspot/callback")
 async def hubspot_callback(code: str, state: str):
     """Exchanges code for token"""
+    frontend_origin = ""
     try:
         # Decode state to get user_id and redirect_uri
         import base64
+        from urllib.parse import urlparse, quote
+
         decoded_state = base64.urlsafe_b64decode(state).decode()
         user_id, redirect_uri_used = decoded_state.split("|", 1)
-        
+
+        parsed_uri = urlparse(redirect_uri_used)
+        if parsed_uri.scheme and parsed_uri.netloc:
+            frontend_origin = f"{parsed_uri.scheme}://{parsed_uri.netloc}"
+
+        if not HUBSPOT_CLIENT_ID or not HUBSPOT_CLIENT_SECRET:
+            raise HTTPException(status_code=500, detail="HubSpot credentials not configured")
+
         async with httpx.AsyncClient() as client:
             logger.info(f"Exchanging code for user: {user_id} with redirect_uri: {redirect_uri_used}")
             res = await client.post("https://api.hubapi.com/oauth/v3/token", data={
@@ -310,13 +327,16 @@ async def hubspot_callback(code: str, state: str):
                 "redirect_uri": redirect_uri_used,
                 "code": code
             })
-            
+
             if res.status_code != 200:
                 logger.error(f"HubSpot Token Exchange Failed: {res.text}")
-                return RedirectResponse(f"http://localhost:3000/tools/communication?error={res.text}", status_code=302)
-                
+                safe_error = quote((res.text or "hubspot_token_exchange_failed")[:500])
+                if frontend_origin:
+                    return RedirectResponse(f"{frontend_origin}/tools/communication?error={safe_error}", status_code=302)
+                return RedirectResponse(f"/tools/communication?error={safe_error}", status_code=302)
+
             tokens = res.json()
-            
+
             # Store tokens for the user
             await db.integrations.update_one(
                 {"user_id": user_id, "provider": "hubspot"},
@@ -328,25 +348,22 @@ async def hubspot_callback(code: str, state: str):
                 }},
                 upsert=True
             )
-            
+
             logger.info("HubSpot connected successfully")
-            
-            # Redirect back to frontend
-            # We must redirect to the frontend URL that matches the redirect_uri's origin
-            # Extract origin from redirect_uri_used
-            from urllib.parse import urlparse
-            parsed_uri = urlparse(redirect_uri_used)
-            frontend_origin = f"{parsed_uri.scheme}://{parsed_uri.netloc}"
-            
-            # Handle the localhost case where backend is 8001 but frontend is 3000
-            if "localhost:8001" in frontend_origin:
-                 frontend_origin = "http://localhost:3000"
-            
-            return RedirectResponse(f"{frontend_origin}/tools/communication?connected=true", status_code=302)
+
+            if frontend_origin:
+                return RedirectResponse(f"{frontend_origin}/tools/communication?connected=true", status_code=302)
+            return RedirectResponse("/tools/communication?connected=true", status_code=302)
+    except HTTPException as e:
+        logger.error(f"HubSpot Callback Error: {e.detail}")
+        if frontend_origin:
+            return RedirectResponse(f"{frontend_origin}/tools/communication?error={e.detail}", status_code=302)
+        return RedirectResponse("/tools/communication?error=server_error", status_code=302)
     except Exception as e:
         logger.error(f"Callback Error: {e}")
-        # Fallback redirect
-        return RedirectResponse(f"http://localhost:3000/tools/communication?error=server_error", status_code=302)
+        if frontend_origin:
+            return RedirectResponse(f"{frontend_origin}/tools/communication?error=server_error", status_code=302)
+        return RedirectResponse("/tools/communication?error=server_error", status_code=302)
 
 @api_router.get("/integrations/hubspot/status")
 async def hubspot_status(user=Depends(get_current_contractor)):

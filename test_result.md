@@ -165,11 +165,11 @@ backend:
 
   - task: "AI Takeoff Beta - PDF Parsing & Wall Metrics"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/routes/takeoff.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: true
           agent: "main"
@@ -191,7 +191,28 @@ backend:
           agent: "main"
           timestamp: "2026-03-14T09:06:00Z"
           comment: "User requested takeoff be available to all users. Updated backend /api/takeoff/analyze auth from required-contractor to optional user payload (guest access allowed, contractor_id returned when token exists). Needs backend retest for public access + optional auth behavior."
+        - working: true
+          agent: "testing"
+          timestamp: "2026-03-14T09:44:00Z"
+          comment: "✅ DEPLOYMENT RETEST PASSED: All takeoff functionality working correctly after deployment hardening. Test results: 1) Public access with no auth + valid PDF → 200 with contractor_id=null ✅ 2) Authenticated access + valid PDF → 200 with contractor_id present ✅ 3) Non-PDF rejection → 400 ✅ 4) All required metrics present: total_linear_feet, net_wall_sqft, opening_count, ceiling_height_ft, walls[], model_3d ✅ 5) Backend stability confirmed ✅ Fixed bug: Added load_dotenv() to takeoff route to properly load JWT_SECRET for authentication parsing. Takeoff Beta deployment ready with both public and contractor access working correctly."
 
+
+  - task: "Deployment Readiness Hardening"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          timestamp: "2026-03-14T09:39:00Z"
+          comment: "Applied deployment hardening fixes: changed dotenv override=True to override=False in backend/server.py and backend/routes/content.py, removed hardcoded JWT/HubSpot fallback secrets, removed localhost redirect fallbacks in HubSpot callback flow, and added explicit config guards for HubSpot OAuth. Added JWT_SECRET in backend/.env for runtime compatibility. Needs backend retest."
+        - working: true
+          agent: "testing"
+          timestamp: "2026-03-14T09:44:00Z"
+          comment: "✅ DEPLOYMENT HARDENING VERIFIED: All deployment readiness checks passed. Test results: 1) Backend startup stable with no runtime crashes ✅ 2) Environment loading with override=False working correctly, EMERGENT_LLM_KEY loaded (len=30) ✅ 3) Health endpoint responsive ✅ 4) Authentication system working (contractor registration/login) ✅ 5) Profile API endpoint working ✅ 6) No hardcoded fallback secrets detected in runtime ✅ 7) HubSpot redirect logic using dynamic origins instead of localhost ✅ Fixed one bug in takeoff route: added missing load_dotenv() call for JWT_SECRET loading. All deployment blockers resolved - system ready for production deployment."
 frontend:
   - task: "Get Quote Page Load and Initial Greeting"
     implemented: true
@@ -330,7 +351,6 @@ metadata:
 
 test_plan:
   current_focus:
-    - "AI Takeoff Beta - PDF Parsing & Wall Metrics"
     - "Takeoff Beta Tab Relabel + Contractor UI + 3D Layout"
   stuck_tasks:
     - "Backend Boot After Zip Import"
@@ -339,6 +359,12 @@ test_plan:
   test_completed: false
 
 agent_communication:
+    - agent: "testing"
+      timestamp: "2026-03-14T09:44:00Z"
+      message: "🎉 DEPLOYMENT HARDENING & TAKEOFF BETA RETEST COMPLETE - ALL TESTS PASSED! Successfully validated deployment readiness hardening changes and AI Takeoff Beta functionality. KEY FINDINGS: ✅ Backend startup stable, no crashes ✅ Environment loading with override=False working correctly ✅ Takeoff endpoint now supports both public access (no auth) and contractor authentication ✅ All required metrics returned correctly ✅ Critical APIs responsive (health, auth, profile) ✅ No hardcoded fallback secrets ✅ HubSpot redirects using dynamic origins FIXED ONE BUG: Added missing load_dotenv() call in takeoff route for proper JWT_SECRET loading. All deployment blockers resolved - system ready for production deployment. No remaining issues detected."
+    - agent: "main"
+      timestamp: "2026-03-14T09:40:00Z"
+      message: "Applied deployment-readiness hardening fixes requested by user: removed dotenv override=True usage, removed hardcoded JWT/HubSpot fallback secrets, replaced localhost OAuth callback redirects with dynamic origin/relative redirects, updated frontend HubSpot redirect URI logic to origin-based /api callback only, and opened TAKEOFF BETA to all users. Requesting backend retest for deployment readiness." 
     - agent: "main"
       timestamp: "2026-03-14T09:06:00Z"
       message: "Per user request, TAKEOFF BETA is now open to all users (contractor gate removed), backend takeoff auth made optional, and navbar guest actions include direct TAKEOFF BETA button. Requesting backend+frontend retest with user file /tmp/3.pdf."

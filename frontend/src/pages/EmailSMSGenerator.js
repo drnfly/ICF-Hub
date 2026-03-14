@@ -33,10 +33,7 @@ export default function EmailSMSGenerator() {
   useEffect(() => {
     // Set initial redirect URI for display
     const currentOrigin = window.location.origin;
-    let uri = `${currentOrigin}/api/auth/hubspot/callback`;
-    if (currentOrigin.includes("localhost:3000")) {
-        uri = "http://localhost:8001/api/auth/hubspot/callback";
-    }
+    const uri = `${currentOrigin}/api/auth/hubspot/callback`;
     setRedirectUriDisplay(uri);
 
     checkConnection();
@@ -69,29 +66,8 @@ export default function EmailSMSGenerator() {
       // Dynamic Redirect URI based on current browser location
       // This ensures it works on both localhost AND cloud previews
       // IMPORTANT: This URL must be added to HubSpot Developer App settings!
-      const currentOrigin = window.location.origin; // e.g., https://myapp.com or http://localhost:3000
-      
-      // Note: In local dev, frontend is 3000, backend is 8001.
-      // But in PROD/Cloud, they are often on the SAME domain, just /api route.
-      // We will tell the backend to use THIS logic as the redirect target.
-      // The backend is proxied at /api usually.
-      // So the callback should be: origin + /api/auth/hubspot/callback
-      
-      // HOWEVER, if we are local (3000), the backend is at 8001. 
-      // If we redirect to 3000/api/..., the react dev server proxies it? Yes, usually setupProxy.js.
-      // If not, we might need to point to 8001 directly.
-      
-      // Let's try pointing to the BACKEND URL directly if we can.
-      // But REACT_APP_BACKEND_URL might be internal (0.0.0.0).
-      
-      // SAFEST BET: Use the window.location.origin + /api/... 
-      // ensuring the cloud ingress handles the routing.
-      // If local, we might need a special check.
-      
-      let redirectUri = `${currentOrigin}/api/auth/hubspot/callback`;
-      if (currentOrigin.includes("localhost:3000")) {
-          redirectUri = "http://localhost:8001/api/auth/hubspot/callback";
-      }
+      const currentOrigin = window.location.origin;
+      const redirectUri = `${currentOrigin}/api/auth/hubspot/callback`;
       
       // Store for display
       setRedirectUriDisplay(redirectUri);
