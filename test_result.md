@@ -137,6 +137,23 @@ backend:
           timestamp: "2025-02-20T10:15:00Z"
           comment: "✅ PASS: Summary generation working correctly. Backend successfully generates structured summary with 9 bullet points: Name (Alex Carter), Location (Denver, CO), Contact (alex@example.com), Project Type/Size (ICF home, 2,200 sq ft), Budget (~$450k), Timeline (~7 months), Key Requirements (contractor matching), Blueprint Insights (none uploaded), Next Steps (match with contractors). Summary returned in response and displayed on frontend."
 
+  - task: "Backend Boot After Zip Import"
+    implemented: true
+    working: false
+    file: "/app/backend/requirements.txt"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          timestamp: "2026-03-14T07:45:00Z"
+          comment: "Imported user zip into /app, installed dependencies, found backend startup failure due to missing sendgrid package, added sendgrid>=6.11.0 to requirements, reinstalled, and backend now starts via supervisor. Needs backend testing validation after environment sync."
+        - working: false
+          agent: "testing"
+          timestamp: "2026-03-14T07:44:00Z"
+          comment: "CRITICAL ISSUES FOUND: 1) AI Chat System (Intake/Chat endpoints) completely broken - returning 503 'AI service not configured' despite EMERGENT_LLM_KEY being present in .env file. This blocks core functionality (intake completion, chat features). 2) File upload URL configuration issue - returns localhost:8001 URLs instead of proper external URLs (backend uses wrong env var). WORKING FEATURES: Backend boots successfully, health check passes, MongoDB connection working, contractor registration/login working, leads creation working, stats endpoint working. 5 of 8 core APIs passing, but AI chat failure is critical blocker."
+
 frontend:
   - task: "Get Quote Page Load and Initial Greeting"
     implemented: true
@@ -237,13 +254,17 @@ metadata:
   test_url: "https://lead-gen-build.preview.emergentagent.com/get-quote"
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Backend Boot After Zip Import"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
-  test_completed: true
+  test_completed: false
 
 agent_communication:
+    - agent: "main"
+      timestamp: "2026-03-14T07:46:00Z"
+      message: "Imported uploaded project zip into /app, installed frontend/backend dependencies, restarted services, fixed backend startup by adding missing sendgrid dependency in backend/requirements.txt. Requesting backend validation focused on startup and core API availability after environment sync."
     - agent: "testing"
       timestamp: "2025-02-20T08:30:00Z"
       message: "Testing completed for intake summary feature. CRITICAL BUG IDENTIFIED: The backend INTAKE_SYSTEM_PROMPT does not instruct the AI to output 'COMPLETE:' keyword when user requests contractor matching. This prevents intake from ever completing, blocking the entire summary feature. All chat functionality (messages, file upload, session persistence) works correctly. Frontend completion screen and summary card code is properly implemented with correct data-testids and structure. The only issue is the AI prompt engineering in backend - needs explicit instruction to output 'COMPLETE: [message]' when finalizing intake. Recommend updating INTAKE_SYSTEM_PROMPT at line 699 to: 'If the user asks for a contractor match, respond with COMPLETE: followed by a brief confirmation to finalize the intake.'"
@@ -253,3 +274,6 @@ agent_communication:
     - agent: "testing"
       timestamp: "2025-02-20T14:45:00Z"
       message: "✅✅ DOUBLE BULLET FIX VERIFIED! Quick UI re-check completed successfully. The double bullet marker issue (previously showing '• •') has been completely resolved. Tested exact user flow: sent contact info → project details → completion request. Completion screen appeared with summary card displaying all 9 items with SINGLE bullet markers only. Detailed analysis confirmed each item (0-8) shows exactly 1 bullet character. Frontend fix at line 36 (GetQuote.js) using .replace(/^[-*•]\s*/, '') successfully strips backend bullets before rendering. UI looks clean and professional. All intake features remain fully functional. No console/network errors. Feature is production-ready and polished."
+    - agent: "testing"
+      timestamp: "2026-03-14T07:44:00Z"
+      message: "🔧 BACKEND TESTING COMPLETED after ZIP IMPORT. RESULTS: ✅ Backend successfully boots and is stable - no crash loops detected. ✅ Core infrastructure working: health check passes, MongoDB connected, supervisor stable. ✅ 5 of 8 major APIs working: contractor registration/login, leads creation, contractors listing, stats endpoint. ❌ CRITICAL: AI Chat System completely broken - all intake/chat endpoints returning 503 'AI service not configured' despite EMERGENT_LLM_KEY present in .env. This blocks core chat/intake functionality. ❌ File upload URLs using localhost instead of external URLs (minor config issue). RECOMMENDATION: Main agent needs to investigate AI service configuration - likely environment loading or API key validation issue in production environment."

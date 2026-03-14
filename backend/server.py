@@ -20,6 +20,7 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
 from routes import content
+from routes import takeoff
 from vision_helper import analyze_image_with_gpt4o
 
 ROOT_DIR = Path(__file__).parent
@@ -1579,6 +1580,7 @@ async def health():
     return {"status": "ok"}
 
 app.include_router(api_router)
+app.include_router(takeoff.router, prefix="/api")
 app.include_router(content.router, prefix="/api")
 
 app.add_middleware(
