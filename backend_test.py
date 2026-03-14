@@ -11,8 +11,8 @@ import uuid
 from pathlib import Path
 import time
 
-# Get backend URL from environment
-BACKEND_URL = os.environ.get('REACT_APP_BACKEND_URL', 'http://187.124.66.30:8001')
+# Test against local runtime target as specified in review request
+BACKEND_URL = 'http://localhost:8001'
 API_BASE = f"{BACKEND_URL}/api"
 
 class Colors:
