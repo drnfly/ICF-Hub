@@ -19,7 +19,7 @@ class MessageResponse(BaseModel):
     subject: Optional[str] = None
     body: str
 
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+EMERGENT_LLM_KEY = (os.environ.get('EMERGENT_LLM_KEY') or '').strip()
 
 SYSTEM_PROMPT_EMAIL = """You are an expert professional communication assistant for construction contractors.
 Your goal is to write clear, effective, and professional emails to homeowners/leads.
@@ -36,10 +36,10 @@ Do not include any other text."""
 async def generate_message(data: MessageGenerateRequest):
     global EMERGENT_LLM_KEY
     if not EMERGENT_LLM_KEY:
-        # Fallback to env var if not in os.environ (sometimes not loaded in router)
+        # Fallback to env var if not in process env (router import order can vary)
         from dotenv import load_dotenv
-        load_dotenv(Path(__file__).parent.parent / '.env')
-        EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', 'sk-emergent-33b71A689F68269E53')
+        load_dotenv(Path(__file__).parent.parent / '.env', override=True)
+        EMERGENT_LLM_KEY = (os.environ.get('EMERGENT_LLM_KEY') or '').strip()
     
     if not EMERGENT_LLM_KEY:
         raise HTTPException(status_code=500, detail="AI service not configured")

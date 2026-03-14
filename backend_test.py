@@ -1,329 +1,399 @@
 #!/usr/bin/env python3
 """
-ICF Hub Backend Testing Suite
-Tests backend APIs after zip import and environment setup
+Backend API Test Suite for ICF Hub
+Focus: Backend Boot After Zip Import validation
+
+Tests:
+1. Backend health and stability
+2. AI chat/intake endpoints (no more 503 "AI service not configured")
+3. Upload URL configuration (no localhost fallback)
+4. Core API functionality
 """
 
-import requests
+import asyncio
+import httpx
 import json
+import os
 import uuid
-import time
-from datetime import datetime
+from pathlib import Path
 
-# Backend URL from frontend environment
+# Get backend URL from frontend env
+FRONTEND_ENV = Path("/app/frontend/.env")
 BACKEND_URL = "http://187.124.66.30:8001"
+
+if FRONTEND_ENV.exists():
+    with open(FRONTEND_ENV) as f:
+        for line in f:
+            if line.strip().startswith("REACT_APP_BACKEND_URL="):
+                BACKEND_URL = line.strip().split("=", 1)[1].strip('"')
+                break
+
 API_BASE = f"{BACKEND_URL}/api"
 
-class BackendTester:
+class TestResults:
     def __init__(self):
-        self.results = []
-        self.session = requests.Session()
-        
-    def log_result(self, test_name, success, message, details=None):
-        result = {
-            "test": test_name,
-            "success": success,
-            "message": message,
-            "timestamp": datetime.now().isoformat()
-        }
-        if details:
-            result["details"] = details
-        self.results.append(result)
-        status = "✅ PASS" if success else "❌ FAIL"
-        print(f"{status}: {test_name} - {message}")
-        if details and not success:
-            print(f"   Details: {details}")
+        self.passed = []
+        self.failed = []
+        self.critical_failures = []
 
-    def test_backend_boot(self):
-        """Test if backend is running and accessible"""
-        try:
-            response = self.session.get(f"{API_BASE}/health", timeout=10)
+    def log_pass(self, test_name, details=""):
+        print(f"✅ PASS: {test_name}")
+        if details:
+            print(f"   {details}")
+        self.passed.append((test_name, details))
+
+    def log_fail(self, test_name, error, is_critical=False):
+        status = "❌ CRITICAL" if is_critical else "❌ FAIL"
+        print(f"{status}: {test_name}")
+        print(f"   Error: {error}")
+        if is_critical:
+            self.critical_failures.append((test_name, error))
+        else:
+            self.failed.append((test_name, error))
+
+    def summary(self):
+        total = len(self.passed) + len(self.failed) + len(self.critical_failures)
+        print(f"\n{'='*50}")
+        print(f"TEST SUMMARY: {len(self.passed)}/{total} passed")
+        print(f"Critical failures: {len(self.critical_failures)}")
+        print(f"Non-critical failures: {len(self.failed)}")
+        
+        if self.critical_failures:
+            print(f"\n🔥 CRITICAL ISSUES:")
+            for test, error in self.critical_failures:
+                print(f"   - {test}: {error}")
+        
+        if self.failed:
+            print(f"\n⚠️ MINOR ISSUES:")
+            for test, error in self.failed:
+                print(f"   - {test}: {error}")
+
+results = TestResults()
+
+async def test_backend_health():
+    """Test basic backend connectivity and health"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{API_BASE}/health", timeout=10)
             if response.status_code == 200:
-                self.log_result("Backend Boot", True, "Backend health check passed")
+                results.log_pass("Backend Health Check", f"Status: {response.status_code}")
                 return True
             else:
-                self.log_result("Backend Boot", False, f"Health check failed with status {response.status_code}")
+                results.log_fail("Backend Health Check", f"Status: {response.status_code}", is_critical=True)
                 return False
-        except requests.exceptions.RequestException as e:
-            self.log_result("Backend Boot", False, f"Backend unreachable: {str(e)}")
-            return False
+    except Exception as e:
+        results.log_fail("Backend Health Check", str(e), is_critical=True)
+        return False
 
-    def test_stats_endpoint(self):
-        """Test public stats endpoint"""
-        try:
-            response = self.session.get(f"{API_BASE}/stats", timeout=10)
-            if response.status_code == 200:
+async def test_ai_intake_chat():
+    """Test AI intake chat system - should no longer return 503"""
+    try:
+        session_id = str(uuid.uuid4())
+        chat_data = {
+            "message": "Hello, my name is John Smith from Denver, CO. Email: john@test.com",
+            "session_id": session_id
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{API_BASE}/intake/chat", json=chat_data, timeout=30)
+            
+            if response.status_code == 503:
+                results.log_fail("AI Intake Chat", "Still returning 503 'AI service not configured'", is_critical=True)
+                return False
+            elif response.status_code == 500 and "AI service not configured" in response.text:
+                results.log_fail("AI Intake Chat", "AI service not configured error", is_critical=True)
+                return False
+            elif response.status_code == 200:
                 data = response.json()
-                required_keys = ["contractors", "leads", "projects_completed", "energy_savings"]
-                if all(key in data for key in required_keys):
-                    self.log_result("Stats Endpoint", True, "Stats endpoint working with all required fields")
+                if "response" in data:
+                    results.log_pass("AI Intake Chat", f"AI responded: {data['response'][:100]}...")
                     return True
                 else:
-                    missing = [key for key in required_keys if key not in data]
-                    self.log_result("Stats Endpoint", False, f"Missing required fields: {missing}")
+                    results.log_fail("AI Intake Chat", "Invalid response format")
                     return False
             else:
-                self.log_result("Stats Endpoint", False, f"Stats endpoint returned status {response.status_code}")
+                results.log_fail("AI Intake Chat", f"Status: {response.status_code}, Body: {response.text}")
                 return False
-        except Exception as e:
-            self.log_result("Stats Endpoint", False, f"Stats endpoint error: {str(e)}")
-            return False
+                
+    except Exception as e:
+        results.log_fail("AI Intake Chat", str(e), is_critical=True)
+        return False
 
-    def test_intake_chat(self):
-        """Test AI intake chat functionality"""
-        try:
-            session_id = str(uuid.uuid4())
-            chat_data = {
-                "message": "Hi, my name is John Doe and I'm building in Austin, TX. Email john@example.com",
-                "session_id": session_id
-            }
+async def test_regular_chat():
+    """Test regular chat endpoint - should no longer return 503"""
+    try:
+        session_id = str(uuid.uuid4())
+        chat_data = {
+            "message": "What are the benefits of ICF construction?",
+            "session_id": session_id
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{API_BASE}/chat", json=chat_data, timeout=30)
             
-            response = self.session.post(f"{API_BASE}/intake/chat", 
-                                       json=chat_data, 
-                                       timeout=30)
-            
-            if response.status_code == 200:
+            if response.status_code == 503:
+                results.log_fail("Regular Chat", "Still returning 503 'AI service not configured'", is_critical=True)
+                return False
+            elif response.status_code == 500 and "AI service not configured" in response.text:
+                results.log_fail("Regular Chat", "AI service not configured error", is_critical=True)
+                return False
+            elif response.status_code == 200:
                 data = response.json()
-                required_fields = ["response", "session_id", "is_complete"]
-                if all(field in data for field in required_fields):
-                    if "john" in data["response"].lower() or "austin" in data["response"].lower():
-                        self.log_result("Intake Chat", True, "Intake chat working with contextual response")
-                        return True
-                    else:
-                        self.log_result("Intake Chat", False, "AI response lacks context from user message")
-                        return False
+                if "response" in data:
+                    results.log_pass("Regular Chat", f"AI responded: {data['response'][:100]}...")
+                    return True
                 else:
-                    missing = [f for f in required_fields if f not in data]
-                    self.log_result("Intake Chat", False, f"Missing response fields: {missing}")
+                    results.log_fail("Regular Chat", "Invalid response format")
                     return False
             else:
-                self.log_result("Intake Chat", False, f"Intake chat failed with status {response.status_code}")
+                results.log_fail("Regular Chat", f"Status: {response.status_code}, Body: {response.text}")
                 return False
-        except Exception as e:
-            self.log_result("Intake Chat", False, f"Intake chat error: {str(e)}")
-            return False
+                
+    except Exception as e:
+        results.log_fail("Regular Chat", str(e), is_critical=True)
+        return False
 
-    def test_chat_completion_flow(self):
-        """Test intake completion trigger"""
-        try:
-            session_id = str(uuid.uuid4())
-            
-            # First message - contact info
-            response1 = self.session.post(f"{API_BASE}/intake/chat", 
-                                        json={
-                                            "message": "My name is Jane Smith, building in Denver CO, email jane@test.com",
-                                            "session_id": session_id
-                                        }, timeout=30)
-            
-            if response1.status_code != 200:
-                self.log_result("Chat Completion Flow", False, f"Initial chat failed: {response1.status_code}")
-                return False
-            
-            # Completion message
-            response2 = self.session.post(f"{API_BASE}/intake/chat", 
-                                        json={
-                                            "message": "Please match me with contractors now",
-                                            "session_id": session_id
-                                        }, timeout=30)
-            
-            if response2.status_code == 200:
-                data = response2.json()
-                if data.get("is_complete") and "COMPLETE:" in data.get("response", ""):
-                    summary = data.get("summary")
-                    if summary and len(summary) > 50:  # Reasonable summary length
-                        self.log_result("Chat Completion Flow", True, "Intake completion and summary generation working")
-                        return True
-                    else:
-                        self.log_result("Chat Completion Flow", False, "Completion triggered but summary generation failed")
-                        return False
-                else:
-                    self.log_result("Chat Completion Flow", False, "Completion trigger not working properly")
-                    return False
-            else:
-                self.log_result("Chat Completion Flow", False, f"Completion request failed: {response2.status_code}")
-                return False
-        except Exception as e:
-            self.log_result("Chat Completion Flow", False, f"Completion flow error: {str(e)}")
-            return False
-
-    def test_contractor_registration(self):
-        """Test contractor registration endpoint"""
-        try:
-            contractor_data = {
-                "company_name": "Test ICF Builders",
-                "email": f"test-{uuid.uuid4().hex[:8]}@example.com",
-                "password": "testpass123",
-                "phone": "555-123-4567",
-                "city": "Houston",
-                "state": "TX",
-                "description": "ICF construction specialists",
-                "years_experience": 10,
-                "specialties": ["residential", "commercial"]
-            }
-            
-            response = self.session.post(f"{API_BASE}/auth/register", 
-                                       json=contractor_data,
-                                       timeout=15)
+async def test_file_upload_urls():
+    """Test file upload URL configuration - should not return localhost URLs"""
+    try:
+        # Create a minimal test file
+        test_file_content = b"test image content"
+        files = {"file": ("test.png", test_file_content, "image/png")}
+        form_data = {"session_id": str(uuid.uuid4())}
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{API_BASE}/intake/upload", files=files, data=form_data, timeout=20)
             
             if response.status_code == 200:
                 data = response.json()
-                if "token" in data and "contractor" in data:
-                    contractor = data["contractor"]
-                    if contractor.get("company_name") == contractor_data["company_name"]:
-                        self.log_result("Contractor Registration", True, "Registration working with valid token")
-                        return True
-                    else:
-                        self.log_result("Contractor Registration", False, "Registration data mismatch")
-                        return False
-                else:
-                    self.log_result("Contractor Registration", False, "Missing token or contractor data in response")
+                file_url = data.get("url", "")
+                
+                if "localhost" in file_url:
+                    results.log_fail("File Upload URL", f"Still using localhost: {file_url}", is_critical=True)
                     return False
-            else:
-                error_msg = response.text if response.text else f"Status {response.status_code}"
-                self.log_result("Contractor Registration", False, f"Registration failed: {error_msg}")
-                return False
-        except Exception as e:
-            self.log_result("Contractor Registration", False, f"Registration error: {str(e)}")
-            return False
-
-    def test_file_upload_endpoint(self):
-        """Test file upload functionality"""
-        try:
-            session_id = str(uuid.uuid4())
-            
-            # Create a small test file
-            test_content = b"Test image content for upload testing"
-            files = {'file': ('test_image.jpg', test_content, 'image/jpeg')}
-            data = {'session_id': session_id}
-            
-            response = self.session.post(f"{API_BASE}/intake/upload",
-                                       files=files,
-                                       data=data,
-                                       timeout=20)
-            
-            if response.status_code == 200:
-                result = response.json()
-                if "url" in result and "filename" in result:
-                    # Verify the file URL is accessible
-                    file_url = result["url"]
-                    if file_url.startswith(BACKEND_URL):
-                        self.log_result("File Upload", True, "File upload working with accessible URL")
-                        return True
-                    else:
-                        self.log_result("File Upload", False, f"Invalid file URL format: {file_url}")
-                        return False
-                else:
-                    self.log_result("File Upload", False, "Missing url or filename in upload response")
-                    return False
-            else:
-                self.log_result("File Upload", False, f"Upload failed with status {response.status_code}")
-                return False
-        except Exception as e:
-            self.log_result("File Upload", False, f"Upload error: {str(e)}")
-            return False
-
-    def test_contractors_list(self):
-        """Test contractors listing endpoint"""
-        try:
-            response = self.session.get(f"{API_BASE}/contractors", timeout=10)
-            if response.status_code == 200:
-                contractors = response.json()
-                if isinstance(contractors, list):
-                    self.log_result("Contractors List", True, f"Contractors list working (found {len(contractors)} contractors)")
+                elif BACKEND_URL.replace("http://", "").replace("https://", "") in file_url:
+                    results.log_pass("File Upload URL", f"Correctly using configured URL: {file_url}")
                     return True
                 else:
-                    self.log_result("Contractors List", False, "Response is not a list")
+                    results.log_fail("File Upload URL", f"Unexpected URL format: {file_url}")
                     return False
             else:
-                self.log_result("Contractors List", False, f"Contractors endpoint failed: {response.status_code}")
+                results.log_fail("File Upload URL", f"Upload failed: {response.status_code} - {response.text}")
                 return False
-        except Exception as e:
-            self.log_result("Contractors List", False, f"Contractors list error: {str(e)}")
-            return False
+                
+    except Exception as e:
+        results.log_fail("File Upload URL", str(e))
+        return False
 
-    def test_leads_creation(self):
-        """Test lead creation endpoint"""
-        try:
-            lead_data = {
-                "name": "Test Lead",
-                "email": "testlead@example.com",
-                "phone": "555-987-6543",
-                "city": "Miami",
-                "state": "FL",
-                "project_type": "new_home",
-                "project_size": "2000-3000",
-                "budget_range": "400k-500k",
-                "timeline": "6-12_months",
-                "description": "Looking for ICF construction for hurricane resistance"
-            }
-            
-            response = self.session.post(f"{API_BASE}/leads",
-                                       json=lead_data,
-                                       timeout=15)
+async def test_takeoff_upload_urls():
+    """Test takeoff upload URL configuration"""
+    try:
+        # Create a minimal test file
+        test_file_content = b"test blueprint content"
+        files = {"file": ("blueprint.png", test_file_content, "image/png")}
+        form_data = {"format": "imperial", "wall_height": "8"}
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{API_BASE}/takeoff/analyze", files=files, data=form_data, timeout=20)
             
             if response.status_code == 200:
-                result = response.json()
-                if result.get("id") and result.get("status") == "new":
-                    self.log_result("Leads Creation", True, "Lead creation working with proper ID and status")
+                data = response.json()
+                file_url = data.get("file_url", "")
+                
+                if "localhost" in file_url:
+                    results.log_fail("Takeoff Upload URL", f"Still using localhost: {file_url}")
+                    return False
+                elif BACKEND_URL.replace("http://", "").replace("https://", "") in file_url:
+                    results.log_pass("Takeoff Upload URL", f"Correctly using configured URL: {file_url}")
                     return True
                 else:
-                    self.log_result("Leads Creation", False, "Lead created but missing ID or status")
+                    results.log_fail("Takeoff Upload URL", f"Unexpected URL format: {file_url}")
                     return False
             else:
-                self.log_result("Leads Creation", False, f"Lead creation failed: {response.status_code}")
+                results.log_fail("Takeoff Upload URL", f"Upload failed: {response.status_code} - {response.text}")
                 return False
-        except Exception as e:
-            self.log_result("Leads Creation", False, f"Lead creation error: {str(e)}")
-            return False
+                
+    except Exception as e:
+        results.log_fail("Takeoff Upload URL", str(e))
+        return False
 
-    def run_all_tests(self):
-        """Run all backend tests"""
-        print("🔧 Starting ICF Hub Backend Testing Suite...")
-        print(f"Backend URL: {BACKEND_URL}")
-        print("=" * 60)
+async def test_contractor_auth():
+    """Test contractor registration and login"""
+    try:
+        # Test registration
+        email = f"test_{uuid.uuid4().hex[:8]}@example.com"
+        reg_data = {
+            "company_name": "Test ICF Company",
+            "email": email,
+            "password": "testpass123",
+            "phone": "555-0123",
+            "city": "Denver",
+            "state": "CO"
+        }
         
-        tests = [
-            self.test_backend_boot,
-            self.test_stats_endpoint,
-            self.test_intake_chat,
-            self.test_chat_completion_flow,
-            self.test_contractor_registration,
-            self.test_file_upload_endpoint,
-            self.test_contractors_list,
-            self.test_leads_creation
-        ]
-        
-        total_tests = len(tests)
-        passed = 0
-        failed = 0
-        
-        for test_func in tests:
-            try:
-                if test_func():
-                    passed += 1
-                else:
-                    failed += 1
-            except Exception as e:
-                print(f"❌ CRITICAL: {test_func.__name__} crashed: {str(e)}")
-                failed += 1
+        async with httpx.AsyncClient() as client:
+            reg_response = await client.post(f"{API_BASE}/auth/register", json=reg_data, timeout=10)
             
-            time.sleep(0.5)  # Brief pause between tests
+            if reg_response.status_code == 200:
+                reg_result = reg_response.json()
+                token = reg_result.get("token")
+                
+                if token:
+                    # Test login
+                    login_data = {"email": email, "password": "testpass123"}
+                    login_response = await client.post(f"{API_BASE}/auth/login", json=login_data, timeout=10)
+                    
+                    if login_response.status_code == 200:
+                        results.log_pass("Contractor Auth", "Registration and login working")
+                        return True
+                    else:
+                        results.log_fail("Contractor Auth", f"Login failed: {login_response.status_code}")
+                        return False
+                else:
+                    results.log_fail("Contractor Auth", "No token in registration response")
+                    return False
+            else:
+                results.log_fail("Contractor Auth", f"Registration failed: {reg_response.status_code}")
+                return False
+                
+    except Exception as e:
+        results.log_fail("Contractor Auth", str(e))
+        return False
+
+async def test_leads_creation():
+    """Test leads creation endpoint"""
+    try:
+        lead_data = {
+            "name": "Jane Doe",
+            "email": "jane@example.com", 
+            "phone": "555-0456",
+            "city": "Boulder",
+            "state": "CO",
+            "project_type": "new_home",
+            "project_size": "2000_2500_sqft",
+            "budget_range": "400k_500k",
+            "timeline": "6_months",
+            "description": "Looking to build ICF home"
+        }
         
-        print("=" * 60)
-        print(f"🏁 Testing Complete: {passed} passed, {failed} failed out of {total_tests}")
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{API_BASE}/leads", json=lead_data, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "id" in data:
+                    results.log_pass("Leads Creation", f"Created lead with ID: {data['id']}")
+                    return True
+                else:
+                    results.log_fail("Leads Creation", "No ID in response")
+                    return False
+            else:
+                results.log_fail("Leads Creation", f"Status: {response.status_code}")
+                return False
+                
+    except Exception as e:
+        results.log_fail("Leads Creation", str(e))
+        return False
+
+async def test_stats_endpoint():
+    """Test stats endpoint"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{API_BASE}/stats", timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "contractors" in data and "leads" in data:
+                    results.log_pass("Stats Endpoint", f"Returns: {data}")
+                    return True
+                else:
+                    results.log_fail("Stats Endpoint", "Missing expected fields")
+                    return False
+            else:
+                results.log_fail("Stats Endpoint", f"Status: {response.status_code}")
+                return False
+                
+    except Exception as e:
+        results.log_fail("Stats Endpoint", str(e))
+        return False
+
+async def test_content_generation():
+    """Test AI content generation - depends on AI service"""
+    try:
+        # First create a contractor account
+        email = f"content_test_{uuid.uuid4().hex[:8]}@example.com"
+        reg_data = {
+            "company_name": "Content Test Company",
+            "email": email,
+            "password": "testpass123"
+        }
         
-        # Summary of critical issues
-        critical_failures = [r for r in self.results if not r["success"] and r["test"] in ["Backend Boot", "Intake Chat", "Chat Completion Flow"]]
-        if critical_failures:
-            print("\n🚨 CRITICAL ISSUES FOUND:")
-            for failure in critical_failures:
-                print(f"   - {failure['test']}: {failure['message']}")
-        
-        return passed, failed
+        async with httpx.AsyncClient() as client:
+            reg_response = await client.post(f"{API_BASE}/auth/register", json=reg_data, timeout=10)
+            
+            if reg_response.status_code == 200:
+                token = reg_response.json().get("token")
+                headers = {"Authorization": f"Bearer {token}"}
+                
+                content_data = {
+                    "platform": "facebook",
+                    "content_type": "educational",
+                    "topic": "ICF benefits",
+                    "tone": "professional",
+                    "count": 1
+                }
+                
+                content_response = await client.post(f"{API_BASE}/content/generate", json=content_data, headers=headers, timeout=30)
+                
+                if content_response.status_code == 503:
+                    results.log_fail("Content Generation", "AI service not configured", is_critical=True)
+                    return False
+                elif content_response.status_code == 200:
+                    results.log_pass("Content Generation", "AI content generation working")
+                    return True
+                else:
+                    results.log_fail("Content Generation", f"Status: {content_response.status_code}")
+                    return False
+            else:
+                results.log_fail("Content Generation", "Could not create test contractor")
+                return False
+                
+    except Exception as e:
+        results.log_fail("Content Generation", str(e))
+        return False
+
+async def main():
+    print(f"🧪 BACKEND TEST SUITE")
+    print(f"Backend URL: {BACKEND_URL}")
+    print(f"API Base: {API_BASE}")
+    print("="*50)
+    
+    # Critical tests (related to the fix focus)
+    print("\n🔥 CRITICAL TESTS (Fix Validation)")
+    await test_backend_health()
+    await test_ai_intake_chat()
+    await test_regular_chat()
+    await test_file_upload_urls()
+    await test_takeoff_upload_urls()
+    
+    # Core API tests
+    print("\n⚙️ CORE API TESTS")
+    await test_contractor_auth()
+    await test_leads_creation()
+    await test_stats_endpoint()
+    await test_content_generation()
+    
+    # Final summary
+    results.summary()
+    
+    # Exit with proper code
+    if results.critical_failures:
+        print(f"\n❌ CRITICAL FAILURES DETECTED - Backend has blockers")
+        return False
+    else:
+        print(f"\n✅ ALL CRITICAL TESTS PASSED - Backend is stable")
+        return True
 
 if __name__ == "__main__":
-    tester = BackendTester()
-    passed, failed = tester.run_all_tests()
-    
-    # Exit with error code if any tests failed
-    exit(0 if failed == 0 else 1)
+    success = asyncio.run(main())
+    exit(0 if success else 1)

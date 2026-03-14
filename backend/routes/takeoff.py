@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Request
 from pathlib import Path
 import uuid
 import logging
@@ -11,8 +11,16 @@ router = APIRouter(prefix="/takeoff")
 UPLOAD_DIR = Path("/app/frontend/public/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+
+
+def get_public_backend_base_url(request: Request) -> str:
+    configured_url = (os.environ.get('REACT_APP_BACKEND_URL') or '').strip().rstrip('/')
+    if configured_url:
+        return configured_url
+    return str(request.base_url).rstrip('/')
+
 @router.post("/analyze")
-async def analyze_takeoff(file: UploadFile = File(...), format: str = Form(...), wall_height: str = Form(...)):
+async def analyze_takeoff(request: Request, file: UploadFile = File(...), format: str = Form(...), wall_height: str = Form(...)):
     """Analyze uploaded plan and extract wall/opening data"""
     try:
         filename = f"{uuid.uuid4().hex}_{file.filename}"
@@ -22,7 +30,8 @@ async def analyze_takeoff(file: UploadFile = File(...), format: str = Form(...),
             content = await file.read()
             buffer.write(content)
         
-        file_url = f"{os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:8001')}/uploads/{filename}"
+        backend_base_url = get_public_backend_base_url(request)
+        file_url = f"{backend_base_url}/uploads/{filename}"
         
         # Use vision analysis to extract plan data
         analysis = await analyze_image_with_gpt4o(file_url)
