@@ -40,9 +40,7 @@ export default function TakeoffEstimator() {
         let response = await fetch(`${primaryBase}/api/contractors/me/profile`, requestOptions);
 
         if (response.status === 404) {
-          // Fallback to local backend on port 8001
-          const fallbackUrl = primaryBase.includes("localhost") ? `${primaryBase}/api/contractors/me/profile` : "http://localhost:8001/api/contractors/me/profile";
-          response = await fetch(fallbackUrl, requestOptions);
+          response = await fetch(`/api/contractors/me/profile`, requestOptions);
         }
 
         if (!response.ok) {
@@ -126,10 +124,7 @@ export default function TakeoffEstimator() {
         fallbackFormData.append("format", "pdf");
         fallbackFormData.append("wall_height", wallHeight || "10");
 
-        // Fallback to local backend on port 8001
-        const fallbackUrl = primaryBase.includes("localhost") ? `${primaryBase}/api/takeoff/analyze` : "http://localhost:8001/api/takeoff/analyze";
-        
-        response = await fetch(fallbackUrl, {
+        response = await fetch(`/api/takeoff/analyze`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`
