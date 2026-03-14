@@ -1,399 +1,415 @@
 #!/usr/bin/env python3
 """
-Backend API Test Suite for ICF Hub
-Focus: Backend Boot After Zip Import validation
-
-Tests:
-1. Backend health and stability
-2. AI chat/intake endpoints (no more 503 "AI service not configured")
-3. Upload URL configuration (no localhost fallback)
-4. Core API functionality
+Backend Testing Suite for AI Takeoff Beta Feature
+Tests PDF parsing, wall metrics, and authentication requirements
 """
 
-import asyncio
-import httpx
+import requests
 import json
 import os
 import uuid
 from pathlib import Path
+import time
 
-# Get backend URL from frontend env
-FRONTEND_ENV = Path("/app/frontend/.env")
-BACKEND_URL = "http://187.124.66.30:8001"
-
-if FRONTEND_ENV.exists():
-    with open(FRONTEND_ENV) as f:
-        for line in f:
-            if line.strip().startswith("REACT_APP_BACKEND_URL="):
-                BACKEND_URL = line.strip().split("=", 1)[1].strip('"')
-                break
-
+# Get backend URL from environment
+BACKEND_URL = os.environ.get('REACT_APP_BACKEND_URL', 'http://187.124.66.30:8001')
 API_BASE = f"{BACKEND_URL}/api"
 
-class TestResults:
-    def __init__(self):
-        self.passed = []
-        self.failed = []
-        self.critical_failures = []
+class Colors:
+    GREEN = '\033[92m'
+    RED = '\033[91m'
+    YELLOW = '\033[93m'
+    BLUE = '\033[94m'
+    ENDC = '\033[0m'
 
-    def log_pass(self, test_name, details=""):
-        print(f"✅ PASS: {test_name}")
-        if details:
-            print(f"   {details}")
-        self.passed.append((test_name, details))
+def log(message, color=None):
+    if color:
+        print(f"{color}{message}{Colors.ENDC}")
+    else:
+        print(message)
 
-    def log_fail(self, test_name, error, is_critical=False):
-        status = "❌ CRITICAL" if is_critical else "❌ FAIL"
-        print(f"{status}: {test_name}")
-        print(f"   Error: {error}")
-        if is_critical:
-            self.critical_failures.append((test_name, error))
-        else:
-            self.failed.append((test_name, error))
-
-    def summary(self):
-        total = len(self.passed) + len(self.failed) + len(self.critical_failures)
-        print(f"\n{'='*50}")
-        print(f"TEST SUMMARY: {len(self.passed)}/{total} passed")
-        print(f"Critical failures: {len(self.critical_failures)}")
-        print(f"Non-critical failures: {len(self.failed)}")
-        
-        if self.critical_failures:
-            print(f"\n🔥 CRITICAL ISSUES:")
-            for test, error in self.critical_failures:
-                print(f"   - {test}: {error}")
-        
-        if self.failed:
-            print(f"\n⚠️ MINOR ISSUES:")
-            for test, error in self.failed:
-                print(f"   - {test}: {error}")
-
-results = TestResults()
-
-async def test_backend_health():
-    """Test basic backend connectivity and health"""
+def test_health_check():
+    """Test basic backend health check"""
+    log("\n=== Testing Backend Health Check ===", Colors.BLUE)
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{API_BASE}/health", timeout=10)
-            if response.status_code == 200:
-                results.log_pass("Backend Health Check", f"Status: {response.status_code}")
+        response = requests.get(f"{API_BASE}/health", timeout=10)
+        if response.status_code == 200:
+            log("✅ Health check passed", Colors.GREEN)
+            return True
+        else:
+            log(f"❌ Health check failed: {response.status_code}", Colors.RED)
+            return False
+    except Exception as e:
+        log(f"❌ Health check failed: {e}", Colors.RED)
+        return False
+
+def get_contractor_auth_token():
+    """Get an authentication token for testing"""
+    log("\n=== Getting Contractor Authentication Token ===", Colors.BLUE)
+    
+    # First try to login with existing test user
+    login_data = {
+        "email": "test.contractor@example.com",
+        "password": "testpass123"
+    }
+    
+    try:
+        response = requests.post(f"{API_BASE}/auth/login", json=login_data, timeout=10)
+        if response.status_code == 200:
+            token = response.json()["token"]
+            log("✅ Login successful", Colors.GREEN)
+            return token
+    except:
+        pass
+    
+    # If login fails, register new contractor
+    log("Login failed, registering new test contractor...", Colors.YELLOW)
+    register_data = {
+        "company_name": "Test Takeoff Contractor",
+        "email": "test.contractor@example.com",
+        "password": "testpass123",
+        "phone": "555-0123",
+        "city": "Test City",
+        "state": "CO",
+        "description": "ICF Takeoff Testing",
+        "years_experience": 5,
+        "specialties": ["ICF Construction"]
+    }
+    
+    try:
+        response = requests.post(f"{API_BASE}/auth/register", json=register_data, timeout=10)
+        if response.status_code == 200:
+            token = response.json()["token"]
+            log("✅ Registration successful", Colors.GREEN)
+            return token
+        else:
+            log(f"❌ Registration failed: {response.text}", Colors.RED)
+            return None
+    except Exception as e:
+        log(f"❌ Registration error: {e}", Colors.RED)
+        return None
+
+def test_takeoff_auth_required():
+    """Test that takeoff endpoint requires contractor authentication"""
+    log("\n=== Testing Takeoff Authentication Requirements ===", Colors.BLUE)
+    
+    # Create a dummy PDF file for testing
+    test_pdf_content = b"%PDF-1.4\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n2 0 obj\n<<\n/Type /Pages\n/Kids [3 0 R]\n/Count 1\n>>\nendobj\n3 0 obj\n<<\n/Type /Page\n/Parent 2 0 R\n/MediaBox [0 0 612 792]\n>>\nendobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000074 00000 n \n0000000120 00000 n \ntrailer\n<<\n/Size 4\n/Root 1 0 R\n>>\nstartxref\n178\n%%EOF"
+    
+    files = {
+        'file': ('test_plan.pdf', test_pdf_content, 'application/pdf')
+    }
+    data = {
+        'format': 'pdf',
+        'wall_height': '10'
+    }
+    
+    # Test 1: No authorization header
+    log("Testing without authorization header...")
+    try:
+        response = requests.post(f"{API_BASE}/takeoff/analyze", files=files, data=data, timeout=30)
+        if response.status_code == 401:
+            log("✅ Correctly rejected unauthenticated request", Colors.GREEN)
+            auth_test_1 = True
+        else:
+            log(f"❌ Expected 401, got {response.status_code}: {response.text}", Colors.RED)
+            auth_test_1 = False
+    except Exception as e:
+        log(f"❌ Request failed: {e}", Colors.RED)
+        auth_test_1 = False
+    
+    # Test 2: Invalid authorization header
+    log("Testing with invalid authorization header...")
+    try:
+        headers = {'Authorization': 'Bearer invalid-token'}
+        response = requests.post(f"{API_BASE}/takeoff/analyze", files=files, data=data, headers=headers, timeout=30)
+        if response.status_code == 401:
+            log("✅ Correctly rejected invalid token", Colors.GREEN)
+            auth_test_2 = True
+        else:
+            log(f"❌ Expected 401, got {response.status_code}: {response.text}", Colors.RED)
+            auth_test_2 = False
+    except Exception as e:
+        log(f"❌ Request failed: {e}", Colors.RED)
+        auth_test_2 = False
+    
+    return auth_test_1 and auth_test_2
+
+def test_takeoff_pdf_validation(auth_token):
+    """Test that takeoff endpoint only accepts PDF files"""
+    log("\n=== Testing PDF File Validation ===", Colors.BLUE)
+    
+    headers = {'Authorization': f'Bearer {auth_token}'}
+    
+    # Test 1: Non-PDF file should be rejected
+    log("Testing rejection of non-PDF file...")
+    non_pdf_content = b"This is not a PDF file"
+    files = {
+        'file': ('test.txt', non_pdf_content, 'text/plain')
+    }
+    data = {
+        'format': 'pdf',
+        'wall_height': '10'
+    }
+    
+    try:
+        response = requests.post(f"{API_BASE}/takeoff/analyze", files=files, data=data, headers=headers, timeout=30)
+        if response.status_code == 400 and "PDF" in response.text:
+            log("✅ Correctly rejected non-PDF file", Colors.GREEN)
+            pdf_test_1 = True
+        else:
+            log(f"❌ Expected 400 with PDF error, got {response.status_code}: {response.text}", Colors.RED)
+            pdf_test_1 = False
+    except Exception as e:
+        log(f"❌ Request failed: {e}", Colors.RED)
+        pdf_test_1 = False
+    
+    # Test 2: File with PDF extension but wrong content
+    log("Testing file with .pdf extension but non-PDF content...")
+    files = {
+        'file': ('fake.pdf', non_pdf_content, 'application/pdf')
+    }
+    
+    try:
+        response = requests.post(f"{API_BASE}/takeoff/analyze", files=files, data=data, headers=headers, timeout=30)
+        if response.status_code == 400:
+            log("✅ Correctly rejected fake PDF file", Colors.GREEN) 
+            pdf_test_2 = True
+        else:
+            log(f"❌ Expected 400, got {response.status_code}: {response.text}", Colors.RED)
+            pdf_test_2 = False
+    except Exception as e:
+        log(f"❌ Request failed: {e}", Colors.RED)
+        pdf_test_2 = False
+    
+    return pdf_test_1 and pdf_test_2
+
+def test_takeoff_pdf_analysis(auth_token):
+    """Test PDF analysis and response structure"""
+    log("\n=== Testing PDF Analysis and Response Structure ===", Colors.BLUE)
+    
+    headers = {'Authorization': f'Bearer {auth_token}'}
+    
+    # Create a more complete test PDF
+    test_pdf_content = b"""%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Contents 4 0 R
+>>
+endobj
+4 0 obj
+<<
+/Length 44
+>>
+stream
+BT
+/F1 12 Tf
+100 700 Td
+(Test Floor Plan) Tj
+ET
+endstream
+endobj
+xref
+0 5
+0000000000 65535 f 
+0000000009 00000 n 
+0000000074 00000 n 
+0000000120 00000 n 
+0000000179 00000 n 
+trailer
+<<
+/Size 5
+/Root 1 0 R
+>>
+startxref
+262
+%%EOF"""
+    
+    files = {
+        'file': ('floor_plan.pdf', test_pdf_content, 'application/pdf')
+    }
+    data = {
+        'format': 'pdf',
+        'wall_height': '10'
+    }
+    
+    log("Analyzing PDF with takeoff endpoint...")
+    try:
+        response = requests.post(f"{API_BASE}/takeoff/analyze", files=files, data=data, headers=headers, timeout=60)
+        
+        if response.status_code != 200:
+            log(f"❌ Analysis failed: {response.status_code} - {response.text}", Colors.RED)
+            return False
+        
+        result = response.json()
+        log("✅ PDF analysis completed successfully", Colors.GREEN)
+        
+        # Validate required response structure
+        required_fields = [
+            'summary',
+            'walls', 
+            'model_3d',
+            'file_url',
+            'filename',
+            'contractor_id'
+        ]
+        
+        missing_fields = []
+        for field in required_fields:
+            if field not in result:
+                missing_fields.append(field)
+        
+        if missing_fields:
+            log(f"❌ Missing required fields: {missing_fields}", Colors.RED)
+            return False
+        
+        # Validate summary structure
+        required_summary_fields = [
+            'total_linear_feet',
+            'net_wall_sqft', 
+            'opening_count',
+            'ceiling_height_ft'
+        ]
+        
+        summary = result.get('summary', {})
+        missing_summary_fields = []
+        for field in required_summary_fields:
+            if field not in summary:
+                missing_summary_fields.append(field)
+        
+        if missing_summary_fields:
+            log(f"❌ Missing summary fields: {missing_summary_fields}", Colors.RED)
+            return False
+        
+        log("✅ All required response fields present", Colors.GREEN)
+        
+        # Check if walls array exists
+        walls = result.get('walls', [])
+        if not isinstance(walls, list):
+            log("❌ 'walls' should be an array", Colors.RED)
+            return False
+        
+        log(f"✅ Found {len(walls)} wall(s) in analysis", Colors.GREEN)
+        
+        # Check model_3d structure
+        model_3d = result.get('model_3d', {})
+        if 'walls' not in model_3d:
+            log("❌ 'model_3d.walls' missing", Colors.RED)
+            return False
+        
+        model_walls = model_3d.get('walls', [])
+        log(f"✅ Found {len(model_walls)} 3D model wall(s)", Colors.GREEN)
+        
+        # Print sample response structure for verification
+        log("\n--- Sample Response Structure ---", Colors.YELLOW)
+        print(f"Summary total_linear_feet: {summary.get('total_linear_feet')}")
+        print(f"Summary net_wall_sqft: {summary.get('net_wall_sqft')}")
+        print(f"Summary opening_count: {summary.get('opening_count')}")
+        print(f"Summary ceiling_height_ft: {summary.get('ceiling_height_ft')}")
+        print(f"Walls count: {len(walls)}")
+        print(f"Model 3D walls count: {len(model_walls)}")
+        print(f"Contractor ID: {result.get('contractor_id')}")
+        
+        return True
+        
+    except Exception as e:
+        log(f"❌ Analysis failed with exception: {e}", Colors.RED)
+        return False
+
+def test_ai_service_integration():
+    """Test that AI service is properly configured"""
+    log("\n=== Testing AI Service Integration ===", Colors.BLUE)
+    
+    # Check debug endpoint that shows AI service status
+    try:
+        response = requests.get(f"{API_BASE}/debug/env", timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('emergent_llm_key_loaded'):
+                log("✅ AI service key is loaded", Colors.GREEN)
+                log(f"Key length: {data.get('emergent_llm_key_length')}", Colors.YELLOW)
                 return True
             else:
-                results.log_fail("Backend Health Check", f"Status: {response.status_code}", is_critical=True)
+                log("❌ AI service key not loaded", Colors.RED)
                 return False
+        else:
+            log(f"❌ Debug endpoint failed: {response.status_code}", Colors.RED)
+            return False
     except Exception as e:
-        results.log_fail("Backend Health Check", str(e), is_critical=True)
+        log(f"❌ Debug request failed: {e}", Colors.RED)
         return False
 
-async def test_ai_intake_chat():
-    """Test AI intake chat system - should no longer return 503"""
-    try:
-        session_id = str(uuid.uuid4())
-        chat_data = {
-            "message": "Hello, my name is John Smith from Denver, CO. Email: john@test.com",
-            "session_id": session_id
-        }
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.post(f"{API_BASE}/intake/chat", json=chat_data, timeout=30)
-            
-            if response.status_code == 503:
-                results.log_fail("AI Intake Chat", "Still returning 503 'AI service not configured'", is_critical=True)
-                return False
-            elif response.status_code == 500 and "AI service not configured" in response.text:
-                results.log_fail("AI Intake Chat", "AI service not configured error", is_critical=True)
-                return False
-            elif response.status_code == 200:
-                data = response.json()
-                if "response" in data:
-                    results.log_pass("AI Intake Chat", f"AI responded: {data['response'][:100]}...")
-                    return True
-                else:
-                    results.log_fail("AI Intake Chat", "Invalid response format")
-                    return False
-            else:
-                results.log_fail("AI Intake Chat", f"Status: {response.status_code}, Body: {response.text}")
-                return False
-                
-    except Exception as e:
-        results.log_fail("AI Intake Chat", str(e), is_critical=True)
-        return False
-
-async def test_regular_chat():
-    """Test regular chat endpoint - should no longer return 503"""
-    try:
-        session_id = str(uuid.uuid4())
-        chat_data = {
-            "message": "What are the benefits of ICF construction?",
-            "session_id": session_id
-        }
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.post(f"{API_BASE}/chat", json=chat_data, timeout=30)
-            
-            if response.status_code == 503:
-                results.log_fail("Regular Chat", "Still returning 503 'AI service not configured'", is_critical=True)
-                return False
-            elif response.status_code == 500 and "AI service not configured" in response.text:
-                results.log_fail("Regular Chat", "AI service not configured error", is_critical=True)
-                return False
-            elif response.status_code == 200:
-                data = response.json()
-                if "response" in data:
-                    results.log_pass("Regular Chat", f"AI responded: {data['response'][:100]}...")
-                    return True
-                else:
-                    results.log_fail("Regular Chat", "Invalid response format")
-                    return False
-            else:
-                results.log_fail("Regular Chat", f"Status: {response.status_code}, Body: {response.text}")
-                return False
-                
-    except Exception as e:
-        results.log_fail("Regular Chat", str(e), is_critical=True)
-        return False
-
-async def test_file_upload_urls():
-    """Test file upload URL configuration - should not return localhost URLs"""
-    try:
-        # Create a minimal test file
-        test_file_content = b"test image content"
-        files = {"file": ("test.png", test_file_content, "image/png")}
-        form_data = {"session_id": str(uuid.uuid4())}
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.post(f"{API_BASE}/intake/upload", files=files, data=form_data, timeout=20)
-            
-            if response.status_code == 200:
-                data = response.json()
-                file_url = data.get("url", "")
-                
-                if "localhost" in file_url:
-                    results.log_fail("File Upload URL", f"Still using localhost: {file_url}", is_critical=True)
-                    return False
-                elif BACKEND_URL.replace("http://", "").replace("https://", "") in file_url:
-                    results.log_pass("File Upload URL", f"Correctly using configured URL: {file_url}")
-                    return True
-                else:
-                    results.log_fail("File Upload URL", f"Unexpected URL format: {file_url}")
-                    return False
-            else:
-                results.log_fail("File Upload URL", f"Upload failed: {response.status_code} - {response.text}")
-                return False
-                
-    except Exception as e:
-        results.log_fail("File Upload URL", str(e))
-        return False
-
-async def test_takeoff_upload_urls():
-    """Test takeoff upload URL configuration"""
-    try:
-        # Create a minimal test file
-        test_file_content = b"test blueprint content"
-        files = {"file": ("blueprint.png", test_file_content, "image/png")}
-        form_data = {"format": "imperial", "wall_height": "8"}
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.post(f"{API_BASE}/takeoff/analyze", files=files, data=form_data, timeout=20)
-            
-            if response.status_code == 200:
-                data = response.json()
-                file_url = data.get("file_url", "")
-                
-                if "localhost" in file_url:
-                    results.log_fail("Takeoff Upload URL", f"Still using localhost: {file_url}")
-                    return False
-                elif BACKEND_URL.replace("http://", "").replace("https://", "") in file_url:
-                    results.log_pass("Takeoff Upload URL", f"Correctly using configured URL: {file_url}")
-                    return True
-                else:
-                    results.log_fail("Takeoff Upload URL", f"Unexpected URL format: {file_url}")
-                    return False
-            else:
-                results.log_fail("Takeoff Upload URL", f"Upload failed: {response.status_code} - {response.text}")
-                return False
-                
-    except Exception as e:
-        results.log_fail("Takeoff Upload URL", str(e))
-        return False
-
-async def test_contractor_auth():
-    """Test contractor registration and login"""
-    try:
-        # Test registration
-        email = f"test_{uuid.uuid4().hex[:8]}@example.com"
-        reg_data = {
-            "company_name": "Test ICF Company",
-            "email": email,
-            "password": "testpass123",
-            "phone": "555-0123",
-            "city": "Denver",
-            "state": "CO"
-        }
-        
-        async with httpx.AsyncClient() as client:
-            reg_response = await client.post(f"{API_BASE}/auth/register", json=reg_data, timeout=10)
-            
-            if reg_response.status_code == 200:
-                reg_result = reg_response.json()
-                token = reg_result.get("token")
-                
-                if token:
-                    # Test login
-                    login_data = {"email": email, "password": "testpass123"}
-                    login_response = await client.post(f"{API_BASE}/auth/login", json=login_data, timeout=10)
-                    
-                    if login_response.status_code == 200:
-                        results.log_pass("Contractor Auth", "Registration and login working")
-                        return True
-                    else:
-                        results.log_fail("Contractor Auth", f"Login failed: {login_response.status_code}")
-                        return False
-                else:
-                    results.log_fail("Contractor Auth", "No token in registration response")
-                    return False
-            else:
-                results.log_fail("Contractor Auth", f"Registration failed: {reg_response.status_code}")
-                return False
-                
-    except Exception as e:
-        results.log_fail("Contractor Auth", str(e))
-        return False
-
-async def test_leads_creation():
-    """Test leads creation endpoint"""
-    try:
-        lead_data = {
-            "name": "Jane Doe",
-            "email": "jane@example.com", 
-            "phone": "555-0456",
-            "city": "Boulder",
-            "state": "CO",
-            "project_type": "new_home",
-            "project_size": "2000_2500_sqft",
-            "budget_range": "400k_500k",
-            "timeline": "6_months",
-            "description": "Looking to build ICF home"
-        }
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.post(f"{API_BASE}/leads", json=lead_data, timeout=10)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if "id" in data:
-                    results.log_pass("Leads Creation", f"Created lead with ID: {data['id']}")
-                    return True
-                else:
-                    results.log_fail("Leads Creation", "No ID in response")
-                    return False
-            else:
-                results.log_fail("Leads Creation", f"Status: {response.status_code}")
-                return False
-                
-    except Exception as e:
-        results.log_fail("Leads Creation", str(e))
-        return False
-
-async def test_stats_endpoint():
-    """Test stats endpoint"""
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{API_BASE}/stats", timeout=10)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if "contractors" in data and "leads" in data:
-                    results.log_pass("Stats Endpoint", f"Returns: {data}")
-                    return True
-                else:
-                    results.log_fail("Stats Endpoint", "Missing expected fields")
-                    return False
-            else:
-                results.log_fail("Stats Endpoint", f"Status: {response.status_code}")
-                return False
-                
-    except Exception as e:
-        results.log_fail("Stats Endpoint", str(e))
-        return False
-
-async def test_content_generation():
-    """Test AI content generation - depends on AI service"""
-    try:
-        # First create a contractor account
-        email = f"content_test_{uuid.uuid4().hex[:8]}@example.com"
-        reg_data = {
-            "company_name": "Content Test Company",
-            "email": email,
-            "password": "testpass123"
-        }
-        
-        async with httpx.AsyncClient() as client:
-            reg_response = await client.post(f"{API_BASE}/auth/register", json=reg_data, timeout=10)
-            
-            if reg_response.status_code == 200:
-                token = reg_response.json().get("token")
-                headers = {"Authorization": f"Bearer {token}"}
-                
-                content_data = {
-                    "platform": "facebook",
-                    "content_type": "educational",
-                    "topic": "ICF benefits",
-                    "tone": "professional",
-                    "count": 1
-                }
-                
-                content_response = await client.post(f"{API_BASE}/content/generate", json=content_data, headers=headers, timeout=30)
-                
-                if content_response.status_code == 503:
-                    results.log_fail("Content Generation", "AI service not configured", is_critical=True)
-                    return False
-                elif content_response.status_code == 200:
-                    results.log_pass("Content Generation", "AI content generation working")
-                    return True
-                else:
-                    results.log_fail("Content Generation", f"Status: {content_response.status_code}")
-                    return False
-            else:
-                results.log_fail("Content Generation", "Could not create test contractor")
-                return False
-                
-    except Exception as e:
-        results.log_fail("Content Generation", str(e))
-        return False
-
-async def main():
-    print(f"🧪 BACKEND TEST SUITE")
-    print(f"Backend URL: {BACKEND_URL}")
-    print(f"API Base: {API_BASE}")
-    print("="*50)
+def main():
+    """Run all takeoff backend tests"""
+    log("=" * 60, Colors.BLUE)
+    log("AI TAKEOFF BETA - BACKEND TESTING SUITE", Colors.BLUE) 
+    log("=" * 60, Colors.BLUE)
     
-    # Critical tests (related to the fix focus)
-    print("\n🔥 CRITICAL TESTS (Fix Validation)")
-    await test_backend_health()
-    await test_ai_intake_chat()
-    await test_regular_chat()
-    await test_file_upload_urls()
-    await test_takeoff_upload_urls()
+    test_results = {}
     
-    # Core API tests
-    print("\n⚙️ CORE API TESTS")
-    await test_contractor_auth()
-    await test_leads_creation()
-    await test_stats_endpoint()
-    await test_content_generation()
+    # Test 1: Backend Health
+    test_results['health'] = test_health_check()
     
-    # Final summary
-    results.summary()
+    # Test 2: AI Service Integration
+    test_results['ai_service'] = test_ai_service_integration()
     
-    # Exit with proper code
-    if results.critical_failures:
-        print(f"\n❌ CRITICAL FAILURES DETECTED - Backend has blockers")
-        return False
-    else:
-        print(f"\n✅ ALL CRITICAL TESTS PASSED - Backend is stable")
+    # Test 3: Get Authentication
+    auth_token = get_contractor_auth_token()
+    test_results['auth_token'] = bool(auth_token)
+    
+    if not auth_token:
+        log("\n❌ Cannot proceed with takeoff tests - no auth token", Colors.RED)
+        return
+    
+    # Test 4: Authentication Requirements
+    test_results['auth_required'] = test_takeoff_auth_required()
+    
+    # Test 5: PDF Validation
+    test_results['pdf_validation'] = test_takeoff_pdf_validation(auth_token)
+    
+    # Test 6: PDF Analysis (Main feature test)
+    test_results['pdf_analysis'] = test_takeoff_pdf_analysis(auth_token)
+    
+    # Summary
+    log("\n" + "=" * 60, Colors.BLUE)
+    log("TEST SUMMARY", Colors.BLUE)
+    log("=" * 60, Colors.BLUE)
+    
+    passed = 0
+    total = len(test_results)
+    
+    for test_name, result in test_results.items():
+        status = "✅ PASS" if result else "❌ FAIL"
+        color = Colors.GREEN if result else Colors.RED
+        log(f"{test_name.replace('_', ' ').title()}: {status}", color)
+        if result:
+            passed += 1
+    
+    log(f"\nOverall: {passed}/{total} tests passed", Colors.YELLOW)
+    
+    if passed == total:
+        log("🎉 ALL TESTS PASSED - Takeoff feature is working!", Colors.GREEN)
         return True
+    else:
+        log("⚠️  Some tests failed - see details above", Colors.RED)
+        return False
 
 if __name__ == "__main__":
-    success = asyncio.run(main())
+    success = main()
     exit(0 if success else 1)

@@ -162,6 +162,20 @@ backend:
           timestamp: "2026-03-14T07:58:00Z"
           comment: "CRITICAL: Fixes NOT effective - deployment issue detected. Backend testing reveals all critical issues persist: 1) AI Chat/Intake endpoints still returning 503 'AI service not configured' 2) File uploads still using localhost URLs. Investigation shows EMERGENT_LLM_KEY correctly loaded in env (sk-emergent-33b..., len=30) and server logs confirm successful loading, but code changes not taking effect. Added debug endpoints and test modifications - none picked up by running server despite supervisor restarts. SUGGESTS: server code caching, multiple instances, or proxy interception. Core APIs working: health check, auth, leads, stats. BLOCKER: Code deployment/reload mechanism failing."
 
+
+  - task: "AI Takeoff Beta - PDF Parsing & Wall Metrics"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/routes/takeoff.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: true
+          agent: "main"
+          timestamp: "2026-03-14T08:13:00Z"
+          comment: "Implemented contractor-only /api/takeoff/analyze flow with JWT header validation, PDF-only validation, PDF first-page rendering via PyMuPDF, AI extraction prompt for wall geometry/openings, normalized output for total linear feet, gross/net sqft, opening counts, ceiling heights, and model_3d wall layout coordinates for frontend visualization."
+
 frontend:
   - task: "Get Quote Page Load and Initial Greeting"
     implemented: true
@@ -253,6 +267,19 @@ frontend:
           timestamp: "2025-02-20T14:45:00Z"
           comment: "✅✅ VERIFIED FIX: Re-tested after bullet marker fix. Conducted full end-to-end test with exact user flow: contact info → project details → completion request. All 9 summary items now display with SINGLE bullet marker (•) only. The double bullet issue has been completely resolved. Frontend code at line 36 uses regex .replace(/^[-*•]\s*/, '') to strip any leading bullets from backend response before rendering with single bullet marker. Analysis confirmed: Item 0-8 all show 'SINGLE (bullets: 1)'. Perfect formatting throughout. Screenshot: b-05-COMPLETION.png"
 
+  - task: "Takeoff Beta Tab Relabel + Contractor UI + 3D Layout"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/pages/TakeoffEstimator.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: true
+          agent: "main"
+          timestamp: "2026-03-14T08:13:00Z"
+          comment: "Relabeled nav to TAKEOFF BETA on existing path (/tools/takeoff-beta), added contractor-only gate on takeoff page, PDF-only upload UX, loading/error states, summary metric cards (total linear feet, net sqft minus openings, opening count, ceiling height), parsed walls table, and new 3D wall layout viewer component wired to backend model_3d payload."
+
 metadata:
   created_by: "testing_agent"
   version: "1.3"
@@ -263,13 +290,18 @@ metadata:
 
 test_plan:
   current_focus:
+    - "AI Takeoff Beta - PDF Parsing & Wall Metrics"
+    - "Takeoff Beta Tab Relabel + Contractor UI + 3D Layout"
+  stuck_tasks:
     - "Backend Boot After Zip Import"
-  stuck_tasks: []
   test_all: false
   test_priority: "high_first"
   test_completed: false
 
 agent_communication:
+    - agent: "main"
+      timestamp: "2026-03-14T08:14:00Z"
+      message: "Implemented requested TAKEOFF BETA feature set: contractor-only access, existing path retained, navbar relabel, PDF-only upload flow, backend wall/opening parsing pipeline, summary metrics (linear feet, net sqft minus openings, opening count, ceiling heights), and frontend 3D wall layout visualization. Requesting backend retest first per protocol."
     - agent: "main"
       timestamp: "2026-03-14T07:57:00Z"
       message: "Applied backend fix set for failed retest: forced backend .env override loading, normalized EMERGENT_LLM_KEY checks, removed hardcoded content route fallback key, and corrected upload URL generation logic to avoid localhost fallback. Requesting backend re-validation of AI chat/intake and upload URL behavior."

@@ -1,372 +1,356 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Play, Download, Plus, Trash2 } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { AlertTriangle, FileUp, Loader2, Play, Ruler, ScanLine, Sparkles, Building2, Lock } from "lucide-react";
+import Takeoff3DViewer from "@/components/Takeoff3DViewer";
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function TakeoffEstimator() {
-  const [file, setFile] = useState(null);
-  const [format, setFormat] = useState('amvic');
-  const [wallHeight, setWallHeight] = useState('10');
-  const [loading, setLoading] = useState(false);
-  const [analysis, setAnalysis] = useState(null);
-  const [walls, setWalls] = useState([]);
-  const [estimate, setEstimate] = useState(null);
-  const [complexity, setComplexity] = useState('standard');
+  const navigate = useNavigate();
   const fileInputRef = useRef(null);
 
-  const baseRate = {
-    'simple': 150,
-    'standard': 175,
-    'complex': 200
-  };
+  const [token] = useState(() => localStorage.getItem("icf_token"));
+  const [authLoading, setAuthLoading] = useState(true);
+  const [contractorProfile, setContractorProfile] = useState(null);
 
-  const handleFileUpload = (e) => {
-    const uploadedFile = e.target.files[0];
-    if (uploadedFile) {
-      setFile(uploadedFile);
+  const [file, setFile] = useState(null);
+  const [wallHeight, setWallHeight] = useState("10");
+
+  const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const [analysis, setAnalysis] = useState(null);
+
+  useEffect(() => {
+    const verifyContractor = async () => {
+      if (!token) {
+        setAuthLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/contractors/me/profile`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error("Contractor access required");
+        }
+
+        const profile = await response.json();
+        setContractorProfile(profile);
+      } catch (e) {
+        setContractorProfile(null);
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+
+    verifyContractor();
+  }, [token]);
+
+  const summary = useMemo(() => analysis?.summary || null, [analysis]);
+  const walls = useMemo(() => analysis?.walls || [], [analysis]);
+  const model3d = useMemo(() => analysis?.model_3d || null, [analysis]);
+
+  const averageWallHeight = useMemo(() => {
+    if (!walls.length) return summary?.ceiling_height_ft || 0;
+    const total = walls.reduce((acc, wall) => acc + (Number(wall.height_ft) || 0), 0);
+    return Number((total / walls.length).toFixed(2));
+  }, [walls, summary]);
+
+  const handleFileUpload = (event) => {
+    const uploadedFile = event.target.files?.[0];
+    if (!uploadedFile) return;
+
+    const isPdf = uploadedFile.type === "application/pdf" || uploadedFile.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) {
+      setError("Takeoff Beta currently supports PDF floor plans only.");
+      setFile(null);
+      return;
     }
+
+    setError("");
+    setFile(uploadedFile);
   };
 
   const handleStartTakeoff = async () => {
     if (!file) {
-      alert('Please upload a plan');
+      setError("Please upload a PDF floor plan first.");
       return;
     }
 
+    if (!token || !contractorProfile) {
+      setError("Contractor sign-in is required to run Takeoff Beta.");
+      return;
+    }
+
+    setError("");
     setLoading(true);
+    setLoadingMessage("Uploading floor plan PDF...");
+
     const formData = new FormData();
-    formData.append('file', file);
-    formData.append('format', format);
-    formData.append('wall_height', wallHeight);
+    formData.append("file", file);
+    formData.append("format", "pdf");
+    formData.append("wall_height", wallHeight || "10");
 
     try {
-      const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
-      const response = await fetch(`${backendUrl}/api/takeoff/analyze`, {
-        method: 'POST',
-        body: formData,
+      const phaseTimer = setTimeout(() => setLoadingMessage("Parsing walls, openings, and generating 3D wall layout..."), 700);
+
+      const response = await fetch(`${BACKEND_URL}/api/takeoff/analyze`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: formData
       });
 
-      if (!response.ok) throw new Error('Analysis failed');
+      clearTimeout(phaseTimer);
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || "Takeoff analysis failed.");
+      }
+
       const data = await response.json();
-      
       setAnalysis(data);
-      setWalls(data.detected_walls || []);
-      calculateEstimate(data.detected_walls || []);
+      setLoadingMessage("Takeoff complete.");
     } catch (err) {
-      alert('Error analyzing plan: ' + err.message);
+      setError(err.message || "Could not analyze this floor plan.");
     } finally {
       setLoading(false);
+      setTimeout(() => setLoadingMessage(""), 600);
     }
   };
 
-  const calculateEstimate = (detectedWalls) => {
-    if (!detectedWalls.length) return;
-
-    let totalLinearFeet = 0;
-    let totalSqft = 0;
-    let cornerCount = 0;
-    let radiusCount = 0;
-
-    detectedWalls.forEach(wall => {
-      totalLinearFeet += wall.linear_feet || 0;
-      totalSqft += wall.sqft || 0;
-      cornerCount += wall.corners || 0;
-      radiusCount += wall.radius_sections || 0;
-    });
-
-    let complexityFactor = 1;
-    if (radiusCount > 5 || cornerCount > 20) {
-      setComplexity('complex');
-      complexityFactor = 1.3;
-    } else if (cornerCount > 10) {
-      setComplexity('standard');
-      complexityFactor = 1.15;
-    } else {
-      setComplexity('simple');
-      complexityFactor = 1;
-    }
-
-    const ratePerSqft = baseRate[complexity] * complexityFactor;
-    const totalCost = totalSqft * ratePerSqft;
-
-    setEstimate({
-      total_sqft: Math.round(totalSqft),
-      total_linear_feet: Math.round(totalLinearFeet),
-      corners: cornerCount,
-      radius_sections: radiusCount,
-      complexity_factor: complexityFactor.toFixed(2),
-      rate_per_sqft: Math.round(ratePerSqft),
-      total_cost: Math.round(totalCost),
-      materials: {
-        icf_blocks: Math.round(totalSqft / 1.5),
-        rebar_lf: Math.round(totalLinearFeet * 0.8),
-        concrete_yds: Math.round(totalSqft / 150)
-      }
-    });
-  };
-
-  const addManualWall = () => {
-    setWalls([...walls, { id: Date.now(), linear_feet: 0, sqft: 0, corners: 0 }]);
-  };
-
-  const updateWall = (id, field, value) => {
-    const updated = walls.map(w => 
-      w.id === id ? { ...w, [field]: parseFloat(value) || 0 } : w
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Checking contractor access...
+        </div>
+      </div>
     );
-    setWalls(updated);
-    calculateEstimate(updated);
-  };
+  }
 
-  const removeWall = (id) => {
-    const updated = walls.filter(w => w.id !== id);
-    setWalls(updated);
-    calculateEstimate(updated);
-  };
-
-  const exportEstimate = () => {
-    if (!estimate) return;
-
-    const pdf = `
-ICF TAKEOFF ESTIMATE
-====================
-Date: ${new Date().toLocaleDateString()}
-Format: ${format.toUpperCase()}
-Wall Height: ${wallHeight} in
-
-PROJECT SUMMARY
-===============
-Total Sqft: ${estimate.total_sqft}
-Total Linear Feet: ${estimate.total_linear_feet}
-Corners: ${estimate.corners}
-Radius Sections: ${estimate.radius_sections}
-Complexity Level: ${complexity}
-Complexity Factor: ${estimate.complexity_factor}x
-
-PRICING
-=======
-Rate per Sqft: $${estimate.rate_per_sqft}
-TOTAL ESTIMATE: $${estimate.total_cost.toLocaleString()}
-
-MATERIALS
-=========
-ICF Blocks: ${estimate.materials.icf_blocks} units
-Rebar: ${estimate.materials.rebar_lf} LF
-Concrete: ${estimate.materials.concrete_yds} cubic yards
-
-WALLS
-=====
-${walls.map((w, i) => `Wall ${i + 1}: ${w.linear_feet} LF, ${w.sqft} sqft, ${w.corners} corners`).join('\n')}
-    `;
-
-    const element = document.createElement('a');
-    element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(pdf));
-    element.setAttribute('download', 'icf-estimate.txt');
-    element.style.display = 'none';
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
-  };
+  if (!contractorProfile) {
+    return (
+      <div className="min-h-screen bg-background px-6 py-20">
+        <div className="max-w-3xl mx-auto border border-border rounded-xl bg-card p-8 text-center shadow-sm">
+          <div className="mx-auto w-12 h-12 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center mb-4">
+            <Lock className="w-6 h-6" />
+          </div>
+          <h1 className="text-2xl font-bold mb-2">Takeoff Beta is Contractor Only</h1>
+          <p className="text-muted-foreground mb-6">
+            Sign in as a contractor to upload PDF floor plans and generate AI wall takeoffs with 3D wall layout.
+          </p>
+          <button
+            onClick={() => navigate("/auth")}
+            className="inline-flex items-center justify-center rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+          >
+            Sign In as Contractor
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-6">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-sm text-orange-600 font-semibold">TOOLS / ICF TAKEOFF</span>
-            <span className="bg-orange-600 text-white px-2 py-1 text-xs font-bold rounded">BETA</span>
-          </div>
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">ICF TAKEOFF ESTIMATOR</h1>
-          <p className="text-gray-600">Early access for contractors. Run it on real jobs, break it if you can, and tell us exactly what's wrong.</p>
-        </div>
-
-        <div className="grid grid-cols-3 gap-6">
-          {/* Left Column - Upload & Settings */}
-          <div className="col-span-2">
-            <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
-              {/* File Upload */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">File Format</label>
-                <select
-                  value={format}
-                  onChange={(e) => setFormat(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                >
-                  <option value="amvic">AmVic</option>
-                  <option value="fdf">FDF</option>
-                  <option value="pdf">PDF</option>
-                </select>
+    <div className="min-h-screen bg-gradient-to-b from-muted/30 to-background px-6 py-24">
+      <div className="max-w-7xl mx-auto">
+        <div className="grid lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <div className="rounded-xl border border-border bg-card p-6">
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <span className="text-xs uppercase tracking-[0.2em] text-orange-500 font-semibold">Tools / ICF Takeoff</span>
+                <span className="bg-orange-500/10 text-orange-600 border border-orange-500/30 px-2 py-0.5 text-[11px] font-bold rounded">BETA</span>
               </div>
+              <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-2">AI TAKEOFF BETA</h1>
+              <p className="text-muted-foreground">
+                Upload a floor plan PDF to parse walls, openings, net wall sqft, ceiling heights, and a 3D wall layout.
+              </p>
+            </div>
 
-              {/* Wall Height */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Wall Height</label>
-                <div className="flex gap-2">
+            <div className="rounded-xl border border-border bg-card p-6 space-y-5">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">ICF Format</label>
+                  <input
+                    value="PDF Plan Parsing"
+                    disabled
+                    className="w-full rounded-md border border-input bg-muted px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">Default Ceiling Height (ft)</label>
                   <input
                     type="number"
+                    min="8"
+                    max="24"
                     value={wallHeight}
                     onChange={(e) => setWallHeight(e.target.value)}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                    className="w-full rounded-md border border-input px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                   />
-                  <select className="px-4 py-2 border border-gray-300 rounded-lg">
-                    <option>in</option>
-                    <option>ft</option>
-                  </select>
                 </div>
               </div>
 
-              {/* Plan Upload */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Upload Plans</label>
-                <div
+                <label className="block text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">Upload floor plan (PDF only)</label>
+                <button
+                  type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-orange-300 rounded-lg p-8 text-center cursor-pointer hover:bg-orange-50 transition"
+                  className="w-full border-2 border-dashed border-orange-300 hover:border-orange-400 rounded-lg p-6 text-left transition bg-orange-50/40"
                 >
-                  <Upload className="mx-auto mb-2 text-orange-600" size={24} />
-                  <p className="text-sm text-gray-600">
-                    {file ? file.name : 'Click to upload or drag and drop'}
-                  </p>
-                </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-md bg-orange-500 text-white flex items-center justify-center">
+                      <FileUp className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="font-semibold">{file ? file.name : "Choose a PDF floor plan"}</p>
+                      <p className="text-sm text-muted-foreground">PDF upload only • Recommended: clear first-floor layout</p>
+                    </div>
+                  </div>
+                </button>
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,.amvic,.fdf"
+                  accept="application/pdf,.pdf"
                   onChange={handleFileUpload}
                   className="hidden"
                 />
               </div>
 
-              {/* Start Button */}
+              {error && (
+                <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700 flex gap-2 items-start">
+                  <AlertTriangle className="w-4 h-4 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
+
               <button
+                type="button"
                 onClick={handleStartTakeoff}
-                disabled={!file || loading}
-                className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white font-bold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition"
+                disabled={loading || !file}
+                className="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
-                <Play size={18} />
-                {loading ? 'ANALYZING...' : 'START AUTOMATIC TAKEOFF'}
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                {loading ? "Running AI Takeoff..." : "Start Automatic Takeoff"}
               </button>
+
+              {loadingMessage && <p className="text-sm text-muted-foreground">{loadingMessage}</p>}
             </div>
 
-            {/* Walls Editor */}
-            {walls.length > 0 && (
-              <div className="bg-white rounded-lg shadow-md p-6 mt-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-bold text-gray-900">Detected Walls</h3>
-                  <button
-                    onClick={addManualWall}
-                    className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
-                  >
-                    <Plus size={16} /> Add Wall
-                  </button>
+            {summary && (
+              <>
+                <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                  <MetricCard icon={Ruler} label="Total Linear Feet" value={`${summary.total_linear_feet} ft`} />
+                  <MetricCard icon={Building2} label="Net Wall Sqft (minus openings)" value={`${summary.net_wall_sqft} sqft`} />
+                  <MetricCard icon={ScanLine} label="Openings" value={`${summary.opening_count}`} />
+                  <MetricCard icon={Sparkles} label="Openings Sqft" value={`${summary.openings_sqft} sqft`} />
+                  <MetricCard icon={Building2} label="Gross Wall Sqft" value={`${summary.gross_wall_sqft} sqft`} />
+                  <MetricCard icon={Ruler} label="Ceiling Heights" value={`${summary.ceiling_height_ft} ft avg`} />
                 </div>
 
-                <div className="space-y-3 max-h-64 overflow-y-auto">
-                  {walls.map((wall, idx) => (
-                    <div key={wall.id} className="flex gap-2 items-end bg-gray-50 p-3 rounded-lg">
-                      <div className="flex-1">
-                        <label className="block text-xs font-semibold text-gray-600 mb-1">Linear Feet</label>
-                        <input
-                          type="number"
-                          value={wall.linear_feet}
-                          onChange={(e) => updateWall(wall.id, 'linear_feet', e.target.value)}
-                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <label className="block text-xs font-semibold text-gray-600 mb-1">Sqft</label>
-                        <input
-                          type="number"
-                          value={wall.sqft}
-                          onChange={(e) => updateWall(wall.id, 'sqft', e.target.value)}
-                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <label className="block text-xs font-semibold text-gray-600 mb-1">Corners</label>
-                        <input
-                          type="number"
-                          value={wall.corners}
-                          onChange={(e) => updateWall(wall.id, 'corners', e.target.value)}
-                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                        />
-                      </div>
-                      <button
-                        onClick={() => removeWall(wall.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  ))}
+                <div className="rounded-xl border border-border bg-card p-6">
+                  <h2 className="text-lg font-semibold mb-3">3D Wall Layout</h2>
+                  <Takeoff3DViewer model3d={model3d} />
+                  <p className="text-xs text-muted-foreground mt-3">
+                    Approximate model based on detected wall geometry from uploaded floor plan.
+                  </p>
                 </div>
-              </div>
+
+                <div className="rounded-xl border border-border bg-card p-6 overflow-x-auto">
+                  <h2 className="text-lg font-semibold mb-4">Parsed Walls</h2>
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-muted-foreground border-b border-border">
+                        <th className="py-2 pr-4">Wall</th>
+                        <th className="py-2 pr-4">Linear ft</th>
+                        <th className="py-2 pr-4">Height ft</th>
+                        <th className="py-2 pr-4">Gross sqft</th>
+                        <th className="py-2 pr-4">Openings</th>
+                        <th className="py-2 pr-4">Net sqft</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {walls.map((wall) => (
+                        <tr key={wall.id} className="border-b border-border/60">
+                          <td className="py-2 pr-4 font-medium">{wall.id}</td>
+                          <td className="py-2 pr-4">{wall.linear_feet}</td>
+                          <td className="py-2 pr-4">{wall.height_ft}</td>
+                          <td className="py-2 pr-4">{wall.sqft}</td>
+                          <td className="py-2 pr-4">{wall.openings_count}</td>
+                          <td className="py-2 pr-4">{wall.net_sqft}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
 
-          {/* Right Column - Status & Estimate */}
-          <div className="col-span-1">
-            {/* Status Box */}
-            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-              <h3 className="font-bold text-gray-900 mb-4">BETA STATUS</h3>
+          <div className="space-y-6">
+            <div className="rounded-xl border border-border bg-card p-6">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">Beta Status</h3>
               <div className="space-y-3 text-sm">
-                <div>
-                  <span className="text-gray-600">VERSION</span>
-                  <p className="font-semibold">0.1-beta</p>
-                </div>
-                <div>
-                  <span className="text-gray-600">ACCESS</span>
-                  <p className="font-semibold">Contractor Only</p>
-                </div>
-                <div>
-                  <span className="text-gray-600">PRICING</span>
-                  <p className="font-semibold">Free During Beta</p>
-                </div>
-                <div>
-                  <span className="text-gray-600">FEEDBACK LOOP</span>
-                  <p className="font-semibold">Weekly Triage</p>
-                </div>
-                <div className="pt-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <span className="text-green-700 font-semibold">BETA OPEN</span>
-                  </div>
-                </div>
+                <StatusRow label="Version" value="0.2-beta" />
+                <StatusRow label="Access" value="Contractor Only" />
+                <StatusRow label="Input" value="PDF Floor Plans" />
+                <StatusRow label="Output" value="Walls + Openings + 3D" />
+                <StatusRow label="Contractor" value={contractorProfile?.company_name || contractorProfile?.email || "Verified"} />
               </div>
             </div>
 
-            {/* Estimate Result */}
-            {estimate && (
-              <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg shadow-md p-6">
-                <h3 className="font-bold text-gray-900 mb-4">ESTIMATE</h3>
-                <div className="space-y-3 mb-6">
-                  <div>
-                    <p className="text-sm text-gray-600">Total Sqft</p>
-                    <p className="text-2xl font-bold text-gray-900">{estimate.total_sqft}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Complexity</p>
-                    <p className="text-sm font-semibold text-orange-700 capitalize">{complexity} ({estimate.complexity_factor}x)</p>
-                  </div>
-                  <div className="border-t border-orange-200 pt-3">
-                    <p className="text-sm text-gray-600">Rate/Sqft</p>
-                    <p className="text-lg font-bold text-orange-700">${estimate.rate_per_sqft}</p>
-                  </div>
-                  <div className="bg-orange-600 text-white rounded p-3 text-center">
-                    <p className="text-xs text-orange-100 mb-1">TOTAL ESTIMATE</p>
-                    <p className="text-3xl font-bold">${estimate.total_cost.toLocaleString()}</p>
-                  </div>
-                </div>
+            <div className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
+              <p className="font-semibold text-foreground mb-2">What this beta returns</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Total linear wall feet</li>
+                <li>Gross sqft and net sqft after openings</li>
+                <li>Opening count and opening area</li>
+                <li>Ceiling height assumptions</li>
+                <li>Interactive 3D wall layout</li>
+              </ul>
+            </div>
 
-                <button
-                  onClick={exportEstimate}
-                  className="w-full flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg transition"
-                >
-                  <Download size={18} />
-                  Export Estimate
-                </button>
+            {summary && (
+              <div className="rounded-xl border border-orange-300 bg-orange-50 p-6">
+                <p className="text-xs uppercase tracking-wide text-orange-600 font-semibold">Takeoff Snapshot</p>
+                <p className="text-2xl font-bold text-orange-700 mt-1">{summary.total_linear_feet} ft</p>
+                <p className="text-sm text-orange-700">Total linear wall length</p>
+                <div className="mt-3 text-sm text-orange-800">
+                  Avg wall height detected: <span className="font-semibold">{averageWallHeight} ft</span>
+                </div>
               </div>
             )}
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function MetricCard({ icon: Icon, label, value }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wide mb-2">
+        <Icon className="w-4 h-4" />
+        <span>{label}</span>
+      </div>
+      <div className="text-2xl font-bold">{value}</div>
+    </div>
+  );
+}
+
+function StatusRow({ label, value }) {
+  return (
+    <div className="flex items-center justify-between border-b border-border/60 pb-2">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-semibold text-foreground">{value}</span>
     </div>
   );
 }

@@ -36,11 +36,13 @@ export default function Navbar() {
     { to: "/campaigns", label: "CAMPAIGNS" },
     { to: "/calendar", label: "CALENDAR" },
     { to: "/tools/communication", label: "COMMUNICATION" },
+    { to: "/tools/takeoff-beta", label: "TAKEOFF BETA" },
     { to: "/pricing", label: "UPGRADE" }, // Added Upgrade link for logged in users
   ] : [
     { to: "/about-icf", label: "WHY ICF" },
     { to: "/contractors", label: "CONTRACTORS" },
     { to: "/pricing", label: "PRICING" },
+    { to: "/tools/takeoff-beta", label: "TAKEOFF BETA" },
     { to: "/get-quote", label: "START PROJECT" },
   ];
 
