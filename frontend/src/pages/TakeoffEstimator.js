@@ -1,12 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { AlertTriangle, FileUp, Loader2, Play, Ruler, ScanLine, Sparkles, Building2, Lock } from "lucide-react";
+import { AlertTriangle, FileUp, Loader2, Play, Ruler, ScanLine, Sparkles, Building2 } from "lucide-react";
 import Takeoff3DViewer from "@/components/Takeoff3DViewer";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function TakeoffEstimator() {
-  const navigate = useNavigate();
   const fileInputRef = useRef(null);
 
   const [token] = useState(() => localStorage.getItem("icf_token"));
@@ -90,10 +88,6 @@ export default function TakeoffEstimator() {
       return;
     }
 
-    if (!token || !contractorProfile) {
-      setError("Contractor sign-in is required to run Takeoff Beta.");
-      return;
-    }
 
     setError("");
     setLoading(true);
@@ -107,11 +101,11 @@ export default function TakeoffEstimator() {
     try {
       const phaseTimer = setTimeout(() => setLoadingMessage("Parsing walls, openings, and generating 3D wall layout..."), 700);
 
+      const requestHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
       const requestOptions = {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
+        headers: requestHeaders,
         body: formData
       };
 
@@ -126,9 +120,7 @@ export default function TakeoffEstimator() {
 
         response = await fetch(`/api/takeoff/analyze`, {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`
-          },
+          headers: requestHeaders,
           body: fallbackFormData
         });
       }
@@ -162,27 +154,7 @@ export default function TakeoffEstimator() {
     );
   }
 
-  if (!contractorProfile) {
-    return (
-      <div className="min-h-screen bg-background px-6 py-20">
-        <div className="max-w-3xl mx-auto border border-border rounded-xl bg-card p-8 text-center shadow-sm">
-          <div className="mx-auto w-12 h-12 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center mb-4">
-            <Lock className="w-6 h-6" />
-          </div>
-          <h1 className="text-2xl font-bold mb-2">Takeoff Beta is Contractor Only</h1>
-          <p className="text-muted-foreground mb-6">
-            Sign in as a contractor to upload PDF floor plans and generate AI wall takeoffs with 3D wall layout.
-          </p>
-          <button
-            onClick={() => navigate("/auth")}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
-          >
-            Sign In as Contractor
-          </button>
-        </div>
-      </div>
-    );
-  }
+
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-muted/30 to-background px-6 py-24">
@@ -324,10 +296,10 @@ export default function TakeoffEstimator() {
               <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">Beta Status</h3>
               <div className="space-y-3 text-sm">
                 <StatusRow label="Version" value="0.2-beta" />
-                <StatusRow label="Access" value="Contractor Only" />
+                <StatusRow label="Access" value="Open to All" />
                 <StatusRow label="Input" value="PDF Floor Plans" />
                 <StatusRow label="Output" value="Walls + Openings + 3D" />
-                <StatusRow label="Contractor" value={contractorProfile?.company_name || contractorProfile?.email || "Verified"} />
+                <StatusRow label="User" value={contractorProfile?.company_name || contractorProfile?.email || "Guest"} />
               </div>
             </div>
 

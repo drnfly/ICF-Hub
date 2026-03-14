@@ -129,6 +129,14 @@ export default function Navbar() {
                   REGISTER
                 </Button>
                 <Button
+                  data-testid="nav-takeoff-beta-btn"
+                  variant="ghost"
+                  onClick={() => navigate("/tools/takeoff-beta")}
+                  className="rounded-sm text-xs tracking-widest font-bold uppercase px-3 py-2 text-orange-600"
+                >
+                  TAKEOFF BETA
+                </Button>
+                <Button
                   data-testid="nav-get-started-btn"
                   onClick={() => navigate("/get-quote")}
                   className="rounded-sm text-xs tracking-widest font-bold uppercase px-5 py-2 hard-shadow"

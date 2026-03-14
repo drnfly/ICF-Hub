@@ -165,11 +165,11 @@ backend:
 
   - task: "AI Takeoff Beta - PDF Parsing & Wall Metrics"
     implemented: true
-    working: true
+    working: "NA"
     file: "/app/backend/routes/takeoff.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
         - working: true
           agent: "main"
@@ -187,6 +187,10 @@ backend:
           agent: "testing"
           timestamp: "2026-03-14T08:22:00Z"
           comment: "✅ CONFIRMED WORKING: Retested against local runtime http://localhost:8001 as requested. All core functionality verified: 1) Unauthenticated requests properly return 401 ✅ 2) Non-PDF uploads properly return 400 ✅ 3) Valid contractor token + PDF returns 200 with all required fields (summary.total_linear_feet, summary.net_wall_sqft, summary.opening_count, summary.ceiling_height_ft, walls[], model_3d.walls[]) ✅ 4) PyMuPDF stable with no import/runtime crashes ✅ 5) AI service properly configured and functional ✅ Backend service stable with successful PDF analysis generating fallback layouts when needed. Previous 404 was indeed test-target mismatch - local backend endpoint working correctly."
+        - working: true
+          agent: "main"
+          timestamp: "2026-03-14T09:06:00Z"
+          comment: "User requested takeoff be available to all users. Updated backend /api/takeoff/analyze auth from required-contractor to optional user payload (guest access allowed, contractor_id returned when token exists). Needs backend retest for public access + optional auth behavior."
 
 frontend:
   - task: "Get Quote Page Load and Initial Greeting"
@@ -281,11 +285,11 @@ frontend:
 
   - task: "Takeoff Beta Tab Relabel + Contractor UI + 3D Layout"
     implemented: true
-    working: false
+    working: "NA"
     file: "/app/frontend/src/pages/TakeoffEstimator.js"
     stuck_count: 3
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
         - working: true
           agent: "main"
@@ -311,6 +315,10 @@ frontend:
           agent: "testing"
           timestamp: "2026-03-14T09:07:00Z"
           comment: "❌ CRITICAL FAILURE: TAKEOFF BETA frontend testing with user-provided PDF (/tmp/3.pdf) reveals major UI rendering issue. NAVBAR PROBLEM: 'TAKEOFF BETA' link is COMPLETELY MISSING from navbar. Code at Navbar.js lines 39 and 45 defines the link for both authenticated and unauthenticated users, but browser screenshots show navbar only displays: 'WHY ICF', 'CONTRACTORS', 'PRICING', 'START PROJECT' (missing TAKEOFF BETA entirely). Playwright tests confirm 0 navbar links detected using standard selectors. APP RENDERING: React app appears to load (ICF HUB logo visible, other nav links present), but TAKEOFF BETA link never renders. Attempted multiple Playwright approaches with extended waits - all confirm missing link. PAGE ACCESS: Direct navigation to /tools/takeoff-beta returns 200 OK, but automated testing cannot proceed past homepage due to missing navigation link. SUSPECTED CAUSE: Frontend build may be stale, or Navbar.js changes not reflected in deployed bundle. The navLinks array at lines 33-47 should include TAKEOFF BETA but browser is not showing it. UNABLE TO COMPLETE: Full takeoff flow testing with /tmp/3.pdf (contractor auth → upload → analysis → verify results) could not be executed due to missing navbar link blocking navigation. Frontend needs rebuild or investigation into why Navbar component changes aren't rendering."
+        - working: true
+          agent: "main"
+          timestamp: "2026-03-14T09:06:00Z"
+          comment: "Applied user-requested open access: removed contractor-only gate in TakeoffEstimator, made takeoff API calls work without auth token, and added explicit TAKEOFF BETA action button in navbar right-side controls for guests to ensure visibility/access. Ready for frontend retest using user PDF."
 
 metadata:
   created_by: "testing_agent"
@@ -331,6 +339,9 @@ test_plan:
   test_completed: false
 
 agent_communication:
+    - agent: "main"
+      timestamp: "2026-03-14T09:06:00Z"
+      message: "Per user request, TAKEOFF BETA is now open to all users (contractor gate removed), backend takeoff auth made optional, and navbar guest actions include direct TAKEOFF BETA button. Requesting backend+frontend retest with user file /tmp/3.pdf."
     - agent: "main"
       timestamp: "2026-03-14T09:00:00Z"
       message: "User provided specific PDF artifact (3.pdf) to use for frontend testing. Re-invoking frontend testing agent with this exact file for TAKEOFF BETA validation."

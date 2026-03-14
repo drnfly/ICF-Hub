@@ -38,18 +38,18 @@ def load_llm_key() -> str:
     return (env_vals.get("EMERGENT_LLM_KEY") or "").strip()
 
 
-def get_current_contractor_payload(authorization: str = Header(None)) -> Dict[str, Any]:
+def get_optional_user_payload(authorization: str = Header(None)) -> Dict[str, Any] | None:
     if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Contractor authentication required")
+        return None
 
     token = authorization.split(" ", 1)[1].strip()
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         if not payload.get("id"):
-            raise HTTPException(status_code=401, detail="Invalid contractor token")
+            return None
         return payload
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid contractor token")
+        return None
 
 
 def pdf_first_page_to_base64_png(pdf_path: Path) -> str:
@@ -269,8 +269,8 @@ async def analyze_takeoff(
     wall_height: str = Form("10"),
     authorization: str = Header(None)
 ):
-    """Analyze uploaded PDF floor plan and extract ICF takeoff metrics for contractors."""
-    contractor = get_current_contractor_payload(authorization)
+    """Analyze uploaded PDF floor plan and extract ICF takeoff metrics."""
+    user_payload = get_optional_user_payload(authorization)
 
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF floor plans are supported in Takeoff Beta.")
@@ -300,7 +300,7 @@ async def analyze_takeoff(
             "filename": filename,
             "format": format,
             "wall_height": wall_height_ft,
-            "contractor_id": contractor.get("id"),
+            "contractor_id": user_payload.get("id") if user_payload else None,
             **takeoff
         }
     except HTTPException:
