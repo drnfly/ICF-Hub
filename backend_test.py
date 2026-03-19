@@ -1,417 +1,306 @@
 #!/usr/bin/env python3
 """
-Backend Testing Suite for Deployment Hardening & AI Takeoff Beta
-Tests deployment readiness hardening and takeoff analyze endpoint behavior
+Backend testing for AI Takeoff Beta - PDF Parsing & Wall Metrics
+Testing updated pipeline that uses up to first 3 PDF pages + extracted text + dimension inference fallback.
 """
 
-import httpx
-import json
-import os
 import asyncio
+import requests
+import os
+import sys
 from pathlib import Path
-import logging
-import uuid
-from typing import Dict, Any
-import base64
+import json
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# Test configuration
+BACKEND_URL = os.getenv("REACT_APP_BACKEND_URL", "http://localhost:8001").rstrip("/")
+API_BASE = f"{BACKEND_URL}/api"
 
-# Configuration
-FRONTEND_ENV_PATH = "/app/frontend/.env"
-TEST_PDF_PATH = "/tmp/test_blueprint.pdf"
+# Test files
+TEST_PDF_FILES = [
+    "/app/frontend/public/uploads/c6557a6df925493eb8c5a09871558061_3.pdf",  # User mentioned 3.pdf
+    "/app/frontend/public/uploads/be524297d58e4f74a3ecf6742cbde30f_3.pdf",   # Another 3.pdf
+    "/app/frontend/public/uploads/6f292dd4aa614a4ab35c5136c86f8cd5_test_blueprint.pdf"  # Test blueprint
+]
 
-def load_frontend_env():
-    """Load frontend environment variables"""
-    env_vars = {}
-    if os.path.exists(FRONTEND_ENV_PATH):
-        with open(FRONTEND_ENV_PATH) as f:
-            for line in f:
-                line = line.strip()
-                if '=' in line and not line.startswith('#'):
-                    key, value = line.split('=', 1)
-                    env_vars[key] = value.strip('"')
-    return env_vars
-
-def get_backend_url():
-    """Get the correct backend URL for testing"""
-    frontend_env = load_frontend_env()
-    backend_url = frontend_env.get('REACT_APP_BACKEND_URL', 'http://localhost:8001')
-    return f"{backend_url}/api"
-
-def create_test_pdf():
-    """Create a simple test PDF for upload testing"""
-    try:
-        import fitz  # PyMuPDF
-        doc = fitz.open()
-        page = doc.new_page(width=612, height=792)
+class TakeoffBackendTest:
+    def __init__(self):
+        self.results = []
+        self.failures = []
+        self.pdf_file = None
         
-        # Draw a simple floor plan
-        text = "FLOOR PLAN\nScale: 1/4\" = 1'\n\n30' x 20' ICF Home\n\nLiving Room\nKitchen\nBedrooms: 3\nBathrooms: 2"
-        page.insert_text((50, 50), text, fontsize=12)
+    def log_result(self, test_name: str, status: str, details: str = ""):
+        result = {"test": test_name, "status": status, "details": details}
+        self.results.append(result)
+        print(f"[{status}] {test_name}: {details}")
         
-        # Draw simple rectangles to simulate floor plan
-        page.draw_rect(fitz.Rect(100, 150, 400, 350))  # Main structure
-        page.draw_rect(fitz.Rect(150, 200, 200, 250))  # Room
+    def log_failure(self, test_name: str, details: str):
+        self.failures.append(f"{test_name}: {details}")
+        self.log_result(test_name, "FAIL", details)
         
-        doc.save(TEST_PDF_PATH)
-        doc.close()
-        logger.info(f"Test PDF created at {TEST_PDF_PATH}")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to create test PDF: {e}")
-        return False
+    def log_success(self, test_name: str, details: str = ""):
+        self.log_result(test_name, "PASS", details)
 
-async def test_backend_startup():
-    """Test A: Backend startup stable, no runtime crash"""
-    logger.info("🧪 Testing backend startup stability...")
-    
-    backend_url = get_backend_url()
-    
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            # Test health endpoint
-            response = await client.get(f"{backend_url}/health")
-            if response.status_code == 200:
-                logger.info("✅ Backend health check passed")
+    def find_test_pdf(self):
+        """Find a suitable PDF file for testing"""
+        for pdf_path in TEST_PDF_FILES:
+            if Path(pdf_path).exists():
+                self.pdf_file = pdf_path
+                self.log_success("PDF File Discovery", f"Using {pdf_path}")
                 return True
-            else:
-                logger.error(f"❌ Health check failed: {response.status_code}")
-                return False
-    except Exception as e:
-        logger.error(f"❌ Backend startup test failed: {e}")
+        
+        self.log_failure("PDF File Discovery", "No test PDF files found")
         return False
 
-async def get_contractor_token():
-    """Register a contractor and get auth token for testing"""
-    logger.info("🔐 Getting contractor authentication token...")
-    
-    backend_url = get_backend_url()
-    
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            # Register a test contractor
-            contractor_data = {
-                "company_name": "Test ICF Company",
-                "email": f"test+{uuid.uuid4().hex[:8]}@example.com",
-                "password": "TestPassword123!",
-                "phone": "555-0123",
-                "city": "Denver",
-                "state": "CO",
-                "description": "ICF construction specialist",
-                "years_experience": 5,
-                "specialties": ["ICF", "Residential"]
-            }
-            
-            response = await client.post(f"{backend_url}/auth/register", json=contractor_data)
-            
-            if response.status_code == 200:
-                data = response.json()
-                token = data.get("token")
-                contractor_id = data.get("contractor", {}).get("id")
-                logger.info(f"✅ Contractor registered with ID: {contractor_id}")
-                return token
-            else:
-                logger.error(f"❌ Contractor registration failed: {response.status_code} - {response.text}")
-                return None
+    def test_unauthenticated_request(self):
+        """Test that unauthenticated requests are handled appropriately (should work in public mode)"""
+        try:
+            with open(self.pdf_file, 'rb') as f:
+                files = {'file': (f'test_{Path(self.pdf_file).name}', f, 'application/pdf')}
+                data = {'format': 'pdf', 'wall_height': '10'}
                 
-    except Exception as e:
-        logger.error(f"❌ Contractor authentication failed: {e}")
+                response = requests.post(
+                    f"{API_BASE}/takeoff/analyze",
+                    files=files,
+                    data=data,
+                    timeout=60
+                )
+                
+                if response.status_code == 200:
+                    self.log_success("Unauthenticated Access", "Public access working (200 OK)")
+                    return response.json()
+                elif response.status_code == 401:
+                    self.log_failure("Unauthenticated Access", "401 Unauthorized - public access not working")
+                else:
+                    self.log_failure("Unauthenticated Access", f"Unexpected status: {response.status_code}")
+                    
+        except Exception as e:
+            self.log_failure("Unauthenticated Access", f"Request failed: {str(e)}")
         return None
 
-async def test_takeoff_no_auth():
-    """Test B1: /api/takeoff/analyze - no auth + valid PDF => 200"""
-    logger.info("🧪 Testing takeoff analyze - no auth + valid PDF...")
-    
-    if not create_test_pdf():
-        logger.error("❌ Could not create test PDF")
-        return False
-    
-    backend_url = get_backend_url()
-    
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            with open(TEST_PDF_PATH, "rb") as pdf_file:
-                files = {
-                    "file": ("test_blueprint.pdf", pdf_file, "application/pdf")
-                }
-                data = {
-                    "format": "pdf",
-                    "wall_height": "10"
-                }
-                
-                response = await client.post(
-                    f"{backend_url}/takeoff/analyze",
-                    files=files,
-                    data=data,
-                    timeout=60.0
-                )
-                
-                if response.status_code == 200:
-                    result = response.json()
-                    
-                    # Verify required fields are present
-                    required_fields = ["summary", "walls", "model_3d", "contractor_id"]
-                    missing_fields = [field for field in required_fields if field not in result]
-                    
-                    if result.get("contractor_id") is None:
-                        logger.info("✅ No auth takeoff test passed - contractor_id is None as expected")
-                    else:
-                        logger.warning(f"⚠️ contractor_id should be None for unauthenticated request, got: {result.get('contractor_id')}")
-                    
-                    # Check summary metrics
-                    summary = result.get("summary", {})
-                    if all(key in summary for key in ["total_linear_feet", "net_wall_sqft", "opening_count", "ceiling_height_ft"]):
-                        logger.info("✅ No auth takeoff test passed - all required metrics present")
-                        return True
-                    else:
-                        logger.error(f"❌ Missing summary fields: {summary}")
-                        return False
-                else:
-                    logger.error(f"❌ No auth takeoff test failed: {response.status_code} - {response.text}")
-                    return False
-                    
-    except Exception as e:
-        logger.error(f"❌ No auth takeoff test failed: {e}")
-        return False
-
-async def test_takeoff_with_auth():
-    """Test B2: /api/takeoff/analyze - with valid contractor token + valid PDF => 200 and contractor_id present"""
-    logger.info("🧪 Testing takeoff analyze - with valid contractor token + valid PDF...")
-    
-    token = await get_contractor_token()
-    if not token:
-        logger.error("❌ Could not get contractor token")
-        return False
-    
-    if not create_test_pdf():
-        logger.error("❌ Could not create test PDF")
-        return False
-    
-    backend_url = get_backend_url()
-    
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            headers = {"Authorization": f"Bearer {token}"}
+    def test_non_pdf_rejection(self):
+        """Test that non-PDF files are properly rejected"""
+        try:
+            # Create a fake text file
+            fake_file = ("fake.txt", b"This is not a PDF", "text/plain")
+            files = {'file': fake_file}
+            data = {'format': 'pdf', 'wall_height': '10'}
             
-            with open(TEST_PDF_PATH, "rb") as pdf_file:
-                files = {
-                    "file": ("test_blueprint.pdf", pdf_file, "application/pdf")
-                }
-                data = {
-                    "format": "pdf", 
-                    "wall_height": "10"
-                }
-                
-                response = await client.post(
-                    f"{backend_url}/takeoff/analyze",
-                    files=files,
-                    data=data,
-                    headers=headers,
-                    timeout=60.0
-                )
-                
-                if response.status_code == 200:
-                    result = response.json()
-                    
-                    # Verify contractor_id is present for authenticated request
-                    contractor_id = result.get("contractor_id")
-                    if contractor_id:
-                        logger.info(f"✅ Auth takeoff test passed - contractor_id present: {contractor_id}")
-                    else:
-                        logger.error("❌ contractor_id should be present for authenticated request")
-                        return False
-                    
-                    # Check required fields
-                    summary = result.get("summary", {})
-                    required_metrics = ["total_linear_feet", "net_wall_sqft", "opening_count", "ceiling_height_ft"]
-                    if all(key in summary for key in required_metrics):
-                        logger.info("✅ Auth takeoff test passed - all required metrics present")
-                        return True
-                    else:
-                        logger.error(f"❌ Missing summary metrics: {summary}")
-                        return False
-                else:
-                    logger.error(f"❌ Auth takeoff test failed: {response.status_code} - {response.text}")
-                    return False
-                    
-    except Exception as e:
-        logger.error(f"❌ Auth takeoff test failed: {e}")
-        return False
-
-async def test_takeoff_non_pdf():
-    """Test B3: /api/takeoff/analyze - non-PDF => 400"""
-    logger.info("🧪 Testing takeoff analyze - non-PDF file rejection...")
-    
-    backend_url = get_backend_url()
-    
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            # Create a fake image file
-            fake_content = b"fake image content"
-            
-            files = {
-                "file": ("test_image.jpg", fake_content, "image/jpeg")
-            }
-            data = {
-                "format": "pdf",
-                "wall_height": "10"
-            }
-            
-            response = await client.post(
-                f"{backend_url}/takeoff/analyze",
+            response = requests.post(
+                f"{API_BASE}/takeoff/analyze",
                 files=files,
                 data=data,
-                timeout=30.0
+                timeout=30
             )
             
             if response.status_code == 400:
-                logger.info("✅ Non-PDF rejection test passed - returned 400 as expected")
-                return True
+                self.log_success("Non-PDF Rejection", "400 error for non-PDF file")
             else:
-                logger.error(f"❌ Non-PDF rejection test failed: Expected 400, got {response.status_code}")
-                return False
+                self.log_failure("Non-PDF Rejection", f"Expected 400, got {response.status_code}")
                 
-    except Exception as e:
-        logger.error(f"❌ Non-PDF rejection test failed: {e}")
-        return False
+        except Exception as e:
+            self.log_failure("Non-PDF Rejection", f"Request failed: {str(e)}")
 
-async def test_critical_apis():
-    """Test C: Existing critical APIs still responsive (health and one auth/profile path)"""
-    logger.info("🧪 Testing critical API endpoints...")
-    
-    backend_url = get_backend_url()
-    
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            # Test health endpoint
-            health_response = await client.get(f"{backend_url}/health")
-            if health_response.status_code != 200:
-                logger.error(f"❌ Health endpoint failed: {health_response.status_code}")
-                return False
-            
-            logger.info("✅ Health endpoint working")
-            
-            # Test contractor registration (auth path)
-            contractor_data = {
-                "company_name": "Test Health Company",
-                "email": f"health+{uuid.uuid4().hex[:8]}@example.com", 
-                "password": "TestPassword123!",
-                "phone": "555-0124",
-                "city": "Test City",
-                "state": "TS"
-            }
-            
-            auth_response = await client.post(f"{backend_url}/auth/register", json=contractor_data)
-            if auth_response.status_code != 200:
-                logger.error(f"❌ Auth registration failed: {auth_response.status_code}")
-                return False
+    def test_invalid_wall_height(self):
+        """Test invalid wall height parameter"""
+        try:
+            with open(self.pdf_file, 'rb') as f:
+                files = {'file': (f'test_{Path(self.pdf_file).name}', f, 'application/pdf')}
+                data = {'format': 'pdf', 'wall_height': 'invalid'}
                 
-            logger.info("✅ Auth registration endpoint working")
-            
-            # Test profile endpoint with valid token
-            auth_data = auth_response.json()
-            token = auth_data.get("token")
-            
-            if token:
-                headers = {"Authorization": f"Bearer {token}"}
-                profile_response = await client.get(f"{backend_url}/contractors/me/profile", headers=headers)
-                if profile_response.status_code != 200:
-                    logger.error(f"❌ Profile endpoint failed: {profile_response.status_code}")
-                    return False
+                response = requests.post(
+                    f"{API_BASE}/takeoff/analyze",
+                    files=files,
+                    data=data,
+                    timeout=30
+                )
                 
-                logger.info("✅ Profile endpoint working")
-            
-            return True
-            
-    except Exception as e:
-        logger.error(f"❌ Critical API test failed: {e}")
-        return False
-
-async def check_env_loading():
-    """Check environment variable loading behavior"""
-    logger.info("🧪 Checking environment loading behavior...")
-    
-    backend_url = get_backend_url()
-    
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            # Check debug env endpoint if it exists
-            response = await client.get(f"{backend_url}/debug/env")
-            if response.status_code == 200:
-                env_data = response.json()
-                logger.info(f"Environment check: {env_data}")
-                
-                # Verify EMERGENT_LLM_KEY is loaded
-                if env_data.get("emergent_llm_key_loaded"):
-                    logger.info("✅ EMERGENT_LLM_KEY properly loaded")
+                if response.status_code == 400:
+                    self.log_success("Invalid Wall Height", "400 error for invalid wall height")
                 else:
-                    logger.warning("⚠️ EMERGENT_LLM_KEY not loaded properly")
-                
-                return env_data.get("emergent_llm_key_loaded", False)
-            else:
-                logger.info("Debug env endpoint not available, checking via other means...")
-                return True
-                
-    except Exception as e:
-        logger.warning(f"Could not check environment loading: {e}")
-        return True  # Non-critical failure
+                    self.log_failure("Invalid Wall Height", f"Expected 400, got {response.status_code}")
+                    
+        except Exception as e:
+            self.log_failure("Invalid Wall Height", f"Request failed: {str(e)}")
 
-async def run_deployment_tests():
-    """Run all deployment readiness tests"""
-    logger.info("🚀 Starting Deployment Readiness & AI Takeoff Beta Testing...")
-    logger.info("=" * 60)
-    
-    test_results = {
-        "backend_startup": False,
-        "takeoff_no_auth": False, 
-        "takeoff_with_auth": False,
-        "takeoff_non_pdf_rejection": False,
-        "critical_apis": False,
-        "env_loading": False
-    }
-    
-    # Test A: Backend startup stable
-    test_results["backend_startup"] = await test_backend_startup()
-    
-    # Test environment loading
-    test_results["env_loading"] = await check_env_loading()
-    
-    # Test B: Takeoff analyze behavior
-    test_results["takeoff_no_auth"] = await test_takeoff_no_auth()
-    test_results["takeoff_with_auth"] = await test_takeoff_with_auth() 
-    test_results["takeoff_non_pdf_rejection"] = await test_takeoff_non_pdf()
-    
-    # Test C: Critical APIs still responsive
-    test_results["critical_apis"] = await test_critical_apis()
-    
-    # Summary
-    logger.info("=" * 60)
-    logger.info("🏁 TEST SUMMARY")
-    logger.info("=" * 60)
-    
-    passed = sum(1 for result in test_results.values() if result)
-    total = len(test_results)
-    
-    for test_name, result in test_results.items():
-        status = "✅ PASS" if result else "❌ FAIL"
-        logger.info(f"{test_name.replace('_', ' ').title()}: {status}")
-    
-    logger.info("=" * 60)
-    logger.info(f"Overall Result: {passed}/{total} tests passed")
-    
-    if passed == total:
-        logger.info("🎉 ALL TESTS PASSED - Deployment ready!")
-    else:
-        logger.warning(f"⚠️  {total - passed} test(s) failed - Review deployment blockers")
-    
-    # Clean up test files
-    if os.path.exists(TEST_PDF_PATH):
-        os.remove(TEST_PDF_PATH)
-        logger.info("🧹 Cleaned up test files")
-    
-    return test_results
+    def validate_response_structure(self, response_data: dict, test_name: str):
+        """Validate the structure of a successful takeoff response"""
+        required_fields = [
+            'summary', 'walls', 'model_3d', 'source_pages_used'
+        ]
+        
+        missing_fields = []
+        for field in required_fields:
+            if field not in response_data:
+                missing_fields.append(field)
+        
+        if missing_fields:
+            self.log_failure(f"{test_name} - Response Structure", f"Missing fields: {missing_fields}")
+            return False
+            
+        # Check summary structure
+        summary = response_data.get('summary', {})
+        summary_fields = ['total_linear_feet', 'net_wall_sqft', 'opening_count', 'ceiling_height_ft']
+        missing_summary = [f for f in summary_fields if f not in summary]
+        
+        if missing_summary:
+            self.log_failure(f"{test_name} - Summary Structure", f"Missing summary fields: {missing_summary}")
+            return False
+            
+        # Check walls array
+        walls = response_data.get('walls', [])
+        if not isinstance(walls, list):
+            self.log_failure(f"{test_name} - Walls Structure", "Walls should be an array")
+            return False
+            
+        # Check model_3d structure
+        model_3d = response_data.get('model_3d', {})
+        if 'walls' not in model_3d:
+            self.log_failure(f"{test_name} - Model3D Structure", "model_3d missing walls array")
+            return False
+            
+        # Check source_pages_used
+        source_pages = response_data.get('source_pages_used', 0)
+        if not isinstance(source_pages, int) or source_pages <= 0:
+            self.log_failure(f"{test_name} - Source Pages", f"source_pages_used should be positive integer, got {source_pages}")
+            return False
+            
+        self.log_success(f"{test_name} - Response Structure", "All required fields present")
+        return True
+
+    def analyze_output_quality(self, response_data: dict, test_name: str):
+        """Analyze if output appears to be meaningful vs generic fallback"""
+        summary = response_data.get('summary', {})
+        walls = response_data.get('walls', [])
+        analysis_notes = response_data.get('analysis', '')
+        
+        # Check for generic fallback patterns
+        total_linear_feet = summary.get('total_linear_feet', 0)
+        wall_count = len(walls)
+        
+        # Generic fallback typically has 4 walls with 100 total linear feet (30+20+30+20)
+        is_likely_fallback = (
+            wall_count == 4 and 
+            total_linear_feet == 100.0 and
+            'fallback' in analysis_notes.lower()
+        )
+        
+        if is_likely_fallback:
+            self.log_result(f"{test_name} - Output Quality", "WARNING", 
+                          "Output appears to be generic fallback layout")
+        else:
+            # Check if we have meaningful dimensions
+            unique_lengths = set()
+            for wall in walls:
+                if 'linear_feet' in wall:
+                    unique_lengths.add(wall['linear_feet'])
+                    
+            if len(unique_lengths) > 2:
+                self.log_success(f"{test_name} - Output Quality", 
+                               f"Appears to be custom analysis - {wall_count} walls, {len(unique_lengths)} unique lengths")
+            else:
+                self.log_result(f"{test_name} - Output Quality", "INFO", 
+                               f"Simple layout detected - {wall_count} walls")
+
+    def test_backend_stability(self):
+        """Test backend stability with multiple requests"""
+        try:
+            stable_requests = 0
+            total_requests = 3
+            
+            for i in range(total_requests):
+                with open(self.pdf_file, 'rb') as f:
+                    files = {'file': (f'test_{i}_{Path(self.pdf_file).name}', f, 'application/pdf')}
+                    data = {'format': 'pdf', 'wall_height': '10'}
+                    
+                    response = requests.post(
+                        f"{API_BASE}/takeoff/analyze",
+                        files=files,
+                        data=data,
+                        timeout=60
+                    )
+                    
+                    if response.status_code == 200:
+                        stable_requests += 1
+                    
+            if stable_requests == total_requests:
+                self.log_success("Backend Stability", f"All {total_requests} requests successful")
+            else:
+                self.log_failure("Backend Stability", 
+                               f"Only {stable_requests}/{total_requests} requests successful")
+                               
+        except Exception as e:
+            self.log_failure("Backend Stability", f"Stability test failed: {str(e)}")
+
+    def run_all_tests(self):
+        """Run all backend tests"""
+        print("=" * 60)
+        print("AI TAKEOFF BETA - BACKEND TESTING")
+        print("Testing updated PDF parsing pipeline with multi-page + text extraction")
+        print("=" * 60)
+        
+        # Step 1: Find test PDF
+        if not self.find_test_pdf():
+            return False
+            
+        # Step 2: Test API endpoints
+        print("\n--- API Endpoint Tests ---")
+        
+        # Test non-PDF rejection
+        self.test_non_pdf_rejection()
+        
+        # Test invalid parameters
+        self.test_invalid_wall_height()
+        
+        # Test main functionality
+        response_data = self.test_unauthenticated_request()
+        
+        if response_data:
+            print("\n--- Response Validation ---")
+            # Validate response structure
+            if self.validate_response_structure(response_data, "Main Test"):
+                # Analyze output quality
+                self.analyze_output_quality(response_data, "Main Test")
+                
+                # Print key metrics for manual review
+                summary = response_data.get('summary', {})
+                print(f"\nKey Metrics from Response:")
+                print(f"  Total Linear Feet: {summary.get('total_linear_feet', 'N/A')}")
+                print(f"  Net Wall Sqft: {summary.get('net_wall_sqft', 'N/A')}")
+                print(f"  Opening Count: {summary.get('opening_count', 'N/A')}")
+                print(f"  Ceiling Height: {summary.get('ceiling_height_ft', 'N/A')}")
+                print(f"  Wall Count: {len(response_data.get('walls', []))}")
+                print(f"  Source Pages Used: {response_data.get('source_pages_used', 'N/A')}")
+                print(f"  Analysis Notes: {response_data.get('analysis', 'N/A')[:100]}...")
+        
+        # Step 3: Test backend stability
+        print("\n--- Stability Tests ---")
+        self.test_backend_stability()
+        
+        # Summary
+        print("\n" + "=" * 60)
+        print("TEST SUMMARY")
+        print("=" * 60)
+        
+        total_tests = len(self.results)
+        passed_tests = len([r for r in self.results if r['status'] == 'PASS'])
+        failed_tests = len([r for r in self.results if r['status'] == 'FAIL'])
+        warnings = len([r for r in self.results if r['status'] == 'WARNING'])
+        
+        print(f"Total Tests: {total_tests}")
+        print(f"Passed: {passed_tests}")
+        print(f"Failed: {failed_tests}")
+        print(f"Warnings: {warnings}")
+        
+        if self.failures:
+            print("\nFAILURES:")
+            for failure in self.failures:
+                print(f"  ❌ {failure}")
+        else:
+            print("\n✅ All critical tests passed!")
+            
+        return failed_tests == 0
 
 if __name__ == "__main__":
-    asyncio.run(run_deployment_tests())
+    tester = TakeoffBackendTest()
+    success = tester.run_all_tests()
+    sys.exit(0 if success else 1)

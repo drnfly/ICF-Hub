@@ -59,16 +59,27 @@ def get_optional_user_payload(authorization: str = Header(None)) -> Dict[str, An
         return None
 
 
-def pdf_first_page_to_base64_png(pdf_path: Path) -> str:
+def pdf_pages_to_images_and_text(pdf_path: Path, max_pages: int = 3) -> tuple[List[str], str]:
     doc = fitz.open(pdf_path)
     if doc.page_count == 0:
         raise ValueError("PDF has no pages")
 
-    page = doc.load_page(0)
-    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
-    png_bytes = pix.tobytes("png")
+    images_b64: List[str] = []
+    text_chunks: List[str] = []
+
+    page_count = min(doc.page_count, max_pages)
+    for idx in range(page_count):
+        page = doc.load_page(idx)
+        pix = page.get_pixmap(matrix=fitz.Matrix(2.2, 2.2), alpha=False)
+        png_bytes = pix.tobytes("png")
+        images_b64.append(base64.b64encode(png_bytes).decode("utf-8"))
+
+        page_text = (page.get_text("text") or "").strip()
+        if page_text:
+            text_chunks.append(f"[PAGE {idx + 1}]\n{page_text}")
+
     doc.close()
-    return base64.b64encode(png_bytes).decode("utf-8")
+    return images_b64, "\n\n".join(text_chunks)
 
 
 def parse_llm_json(raw: str) -> Dict[str, Any]:
@@ -86,6 +97,49 @@ def parse_llm_json(raw: str) -> Dict[str, Any]:
         if match:
             return json.loads(match.group(0))
         raise
+
+
+def infer_walls_from_dimension_text(pdf_text: str, wall_height_ft: float) -> Dict[str, Any]:
+    if not pdf_text:
+        return {}
+
+    dimension_values: List[float] = []
+
+    # Matches 12'-6" or 12' 6" formats
+    feet_inches = re.findall(r"(\d{1,3})\s*['′]\s*(\d{1,2})?\s*(?:\"|in|”)?", pdf_text)
+    for feet, inches in feet_inches:
+        ft = float(feet)
+        inch = float(inches) if inches else 0.0
+        total_ft = ft + (inch / 12.0)
+        if 6 <= total_ft <= 300:
+            dimension_values.append(round(total_ft, 2))
+
+    # Matches decimal feet like 24.5 ft
+    decimal_feet = re.findall(r"\b(\d{1,3}(?:\.\d+)?)\s*(?:ft|feet)\b", pdf_text, flags=re.IGNORECASE)
+    for value in decimal_feet:
+        ft = float(value)
+        if 6 <= ft <= 300:
+            dimension_values.append(round(ft, 2))
+
+    if not dimension_values:
+        return {}
+
+    unique_dims = sorted(set(dimension_values), reverse=True)
+    if len(unique_dims) >= 2:
+        length_a, length_b = unique_dims[0], unique_dims[1]
+        walls = [
+            {"id": "W1", "start": [0, 0], "end": [length_a, 0], "length_ft": length_a, "height_ft": wall_height_ft, "openings": []},
+            {"id": "W2", "start": [length_a, 0], "end": [length_a, length_b], "length_ft": length_b, "height_ft": wall_height_ft, "openings": []},
+            {"id": "W3", "start": [length_a, length_b], "end": [0, length_b], "length_ft": length_a, "height_ft": wall_height_ft, "openings": []},
+            {"id": "W4", "start": [0, length_b], "end": [0, 0], "length_ft": length_b, "height_ft": wall_height_ft, "openings": []}
+        ]
+        return {
+            "walls": walls,
+            "ceiling_height_ft": wall_height_ft,
+            "notes": "Wall layout inferred from dimension text extracted from PDF."
+        }
+
+    return {}
 
 
 def fallback_layout(wall_height_ft: float) -> Dict[str, Any]:
@@ -208,7 +262,7 @@ async def analyze_pdf_takeoff(pdf_path: Path, wall_height_ft: float) -> Dict[str
     if not llm_key:
         raise HTTPException(status_code=503, detail="AI service not configured")
 
-    image_b64 = pdf_first_page_to_base64_png(pdf_path)
+    images_b64, extracted_text = pdf_pages_to_images_and_text(pdf_path, max_pages=3)
 
     system_prompt = """
 You are an ICF takeoff assistant.
@@ -242,12 +296,20 @@ Required schema:
 
 Rules:
 - Use feet for all dimensions.
-- Provide your best estimate from visible floor plan geometry.
-- Include all exterior walls visible on first page.
-- Include opening count via openings arrays.
+- Use visible drawing geometry first; use extracted PDF text as supporting evidence.
+- Include all major exterior walls visible in uploaded pages.
+- Include door/window openings if visible.
+- Do not invent unrealistic dimensions.
 """
 
-    user_prompt = f"Analyze this uploaded floor plan PDF first page for ICF takeoff. Requested default wall height is {wall_height_ft} ft. Return JSON only."
+    clipped_text = extracted_text[:12000] if extracted_text else "No extractable PDF text found."
+    user_prompt = (
+        f"Analyze this uploaded floor plan PDF (up to first 3 pages) for ICF takeoff. "
+        f"Requested default wall height is {wall_height_ft} ft. "
+        f"Use both images and extracted text when estimating walls/openings. "
+        f"Extracted text context:\n{clipped_text}\n\n"
+        "Return JSON only."
+    )
 
     chat = LlmChat(
         api_key=llm_key,
@@ -258,13 +320,21 @@ Rules:
     llm_response = await chat.send_message(
         UserMessage(
             text=user_prompt,
-            file_contents=[ImageContent(image_base64=image_b64)]
+            file_contents=[ImageContent(image_base64=img) for img in images_b64]
         )
     )
 
     raw_payload = parse_llm_json(llm_response)
+
+    # If model returns no walls, attempt rule-based wall inference from PDF text before generic fallback
+    if not raw_payload.get("walls"):
+        inferred_payload = infer_walls_from_dimension_text(extracted_text, wall_height_ft)
+        if inferred_payload.get("walls"):
+            raw_payload = inferred_payload
+
     normalized = normalize_takeoff_payload(raw_payload, wall_height_ft)
     normalized["analysis"] = raw_payload.get("notes") or "AI takeoff extraction completed."
+    normalized["source_pages_used"] = min(len(images_b64), 3)
     return normalized
 
 

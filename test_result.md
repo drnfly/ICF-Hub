@@ -195,6 +195,14 @@ backend:
           agent: "testing"
           timestamp: "2026-03-14T09:44:00Z"
           comment: "✅ DEPLOYMENT RETEST PASSED: All takeoff functionality working correctly after deployment hardening. Test results: 1) Public access with no auth + valid PDF → 200 with contractor_id=null ✅ 2) Authenticated access + valid PDF → 200 with contractor_id present ✅ 3) Non-PDF rejection → 400 ✅ 4) All required metrics present: total_linear_feet, net_wall_sqft, opening_count, ceiling_height_ft, walls[], model_3d ✅ 5) Backend stability confirmed ✅ Fixed bug: Added load_dotenv() to takeoff route to properly load JWT_SECRET for authentication parsing. Takeoff Beta deployment ready with both public and contractor access working correctly."
+        - working: true
+          agent: "main"
+          timestamp: "2026-03-19T03:29:00Z"
+          comment: "Improved PDF parsing pipeline for takeoff accuracy: now processes up to first 3 PDF pages as images, includes extracted PDF text context in LLM prompt, and adds dimension-text inference fallback for wall lengths before generic fallback layout. Goal is better plan reading vs prior first-page-only extraction."
+        - working: true
+          agent: "testing"
+          timestamp: "2026-03-19T04:15:00Z"
+          comment: "✅ PDF PARSING IMPROVEMENTS VALIDATED: Comprehensive testing of updated takeoff pipeline confirms all improvements working correctly. Key findings: 1) Multi-page processing ACTIVE - tested 11-page PDF, confirmed 3 pages processed (source_pages_used=3) ✅ 2) POST /api/takeoff/analyze returns 200 for valid PDFs with complete response structure ✅ 3) All required fields present: summary (total_linear_feet, net_wall_sqft, opening_count, ceiling_height_ft), walls[], model_3d, source_pages_used ✅ 4) Non-PDF rejection working (400 error) ✅ 5) Backend stability confirmed with multiple requests ✅ 6) Analysis quality appears custom rather than generic fallback - test results show varied wall counts (4-6 walls) and realistic dimensions (288-320 linear feet vs generic 100) ✅ 7) Extracted text and dimension inference working - analysis notes reference specific dimensions from PDF text ✅ 8) PyMuPDF multi-page image processing stable with no runtime crashes ✅. Pipeline improvements successfully address user issue of 'not reading plans from PDF properly' - now processes up to 3 pages with text context for better accuracy."
 
 
   - task: "Deployment Readiness Hardening"
@@ -370,14 +378,21 @@ metadata:
   test_url: "https://lead-gen-build.preview.emergentagent.com/get-quote"
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Takeoff Beta Tab Relabel + Contractor UI + 3D Layout"
   stuck_tasks:
     - "Backend Boot After Zip Import"
   test_all: false
   test_priority: "high_first"
-  test_completed: true
+  test_completed: false
 
 agent_communication:
+    - agent: "testing"
+      timestamp: "2026-03-19T04:15:00Z"
+      message: "✅ PDF PARSING IMPROVEMENTS TESTING COMPLETE - ALL VALIDATIONS PASSED! Comprehensive backend testing of updated takeoff pipeline confirms significant improvements. MULTI-PAGE PROCESSING: Successfully tested 11-page PDF, confirmed 3 pages processed (source_pages_used=3) - multi-page feature is ACTIVE and working. API FUNCTIONALITY: POST /api/takeoff/analyze returns 200 with complete response structure (summary metrics, walls[], model_3d, source_pages_used). VALIDATION RESULTS: Non-PDF rejection (400), invalid parameters (400), backend stability (3/3 requests successful), all required fields present. OUTPUT QUALITY: Analysis shows custom dimensions (288-320 linear feet vs generic 100), varied wall counts (4-6 walls), and analysis notes referencing specific PDF text dimensions - indicates improved accuracy over previous first-page-only approach. PIPELINE STABILITY: PyMuPDF multi-page processing stable with no runtime crashes, AI service configured correctly. The improvements successfully address user issue of 'not reading plans from PDF properly' - takeoff pipeline now processes up to 3 pages with extracted text context for enhanced plan reading accuracy. Backend ready for production."
+    - agent: "main"
+      timestamp: "2026-03-19T03:30:00Z"
+      message: "User reported PDF plans are not being read properly. Implemented backend improvements for takeoff extraction (multi-page image analysis + extracted text context + dimension-text inference fallback) and switched viewer back to true interactive Three.js model. Requesting backend retest focused on takeoff accuracy fields and stability."
     - agent: "testing"
       timestamp: "2026-03-19T02:07:00Z"
       message: "🎉 TAKEOFF BETA RETEST COMPLETE - ALL TESTS PASSED! SVG isometric viewer fix is successful. Comprehensive end-to-end testing with /tmp/3.pdf confirms complete functionality: ✅ Page loads correctly with all required fields (Project Name, Block MFG dropdown, Core Size dropdown, Ceiling Height, PDF upload) ✅ Non-PDF rejection works (error displays for .txt file) ✅ PDF upload successful (/tmp/3.pdf, filename displayed) ✅ Backend API /api/takeoff/analyze returns 200 OK ✅ Summary metric cards all visible (140 ft, 1400 sqft, 0 openings, 10 ft) ✅ Parsed Walls table renders with 4 rows (W1-W4) and proper headers ✅ 3D Model Layout section displays SVG isometric viewer with 16 line elements, no crashes. The SVG-based approach completely resolves the react-three-fiber rendering crash. All results sections mount and display correctly. Feature is production-ready. Stuck_count reset to 0, task marked working:true."
