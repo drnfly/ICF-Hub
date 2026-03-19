@@ -92,6 +92,7 @@ def render_pdf_first_page_preview(pdf_path: Path) -> Dict[str, Any]:
 
     page = doc.load_page(0)
     pix = page.get_pixmap(matrix=fitz.Matrix(2.2, 2.2), alpha=False)
+    png_bytes = pix.tobytes("png")
     preview_filename = f"{uuid.uuid4().hex}_preview.png"
     preview_path = UPLOAD_DIR / preview_filename
     pix.save(str(preview_path))
@@ -100,7 +101,8 @@ def render_pdf_first_page_preview(pdf_path: Path) -> Dict[str, Any]:
     return {
         "preview_filename": preview_filename,
         "preview_width": pix.width,
-        "preview_height": pix.height
+        "preview_height": pix.height,
+        "preview_base64": base64.b64encode(png_bytes).decode("utf-8")
     }
 
 
@@ -409,6 +411,7 @@ async def analyze_takeoff(
         return {
             "file_url": file_url,
             "preview_image_url": preview_image_url,
+            "preview_image_data_url": f"data:image/png;base64,{preview_meta['preview_base64']}",
             "preview_width": preview_meta["preview_width"],
             "preview_height": preview_meta["preview_height"],
             "filename": filename,

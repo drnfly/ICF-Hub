@@ -58,6 +58,10 @@ export default function TakeoffEstimator() {
   const summary = useMemo(() => analysis?.summary || null, [analysis]);
   const walls = useMemo(() => analysis?.walls || [], [analysis]);
   const overlayImageUrl = useMemo(() => {
+    if (analysis?.preview_image_data_url) {
+      return analysis.preview_image_data_url;
+    }
+
     const rawUrl = analysis?.preview_image_url || analysis?.file_url;
     if (!rawUrl) return "";
 
