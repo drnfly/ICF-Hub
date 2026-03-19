@@ -1,6 +1,20 @@
 import React, { useMemo } from "react";
 
-const WALL_COLORS = ["#84cc16", "#2563eb", "#9333ea", "#f97316", "#06b6d4", "#ef4444", "#14b8a6"];
+const LOW_HEIGHT_COLOR = [37, 99, 235];
+const HIGH_HEIGHT_COLOR = [239, 68, 68];
+
+function getHeightColor(heightFt, minHeight, maxHeight) {
+  if (!Number.isFinite(heightFt)) return "#f59e0b";
+
+  const span = Math.max(maxHeight - minHeight, 0.0001);
+  const ratio = Math.min(Math.max((heightFt - minHeight) / span, 0), 1);
+
+  const r = Math.round(LOW_HEIGHT_COLOR[0] + (HIGH_HEIGHT_COLOR[0] - LOW_HEIGHT_COLOR[0]) * ratio);
+  const g = Math.round(LOW_HEIGHT_COLOR[1] + (HIGH_HEIGHT_COLOR[1] - LOW_HEIGHT_COLOR[1]) * ratio);
+  const b = Math.round(LOW_HEIGHT_COLOR[2] + (HIGH_HEIGHT_COLOR[2] - LOW_HEIGHT_COLOR[2]) * ratio);
+
+  return `rgb(${r}, ${g}, ${b})`;
+}
 
 function mapWallsToOverlay(walls) {
   if (!walls?.length) return [];
@@ -13,6 +27,13 @@ function mapWallsToOverlay(walls) {
       { x: Number(end[0]) || 0, y: Number(end[1]) || 0 }
     ];
   });
+
+  const heights = walls
+    .map((wall) => Number(wall.height_ft))
+    .filter((value) => Number.isFinite(value) && value > 0);
+
+  const minHeight = heights.length ? Math.min(...heights) : 0;
+  const maxHeight = heights.length ? Math.max(...heights) : 0;
 
   const minX = Math.min(...points.map((p) => p.x));
   const maxX = Math.max(...points.map((p) => p.x));
@@ -31,16 +52,19 @@ function mapWallsToOverlay(walls) {
     const ex = ((Number(end[0]) || 0) - minX) / spanX;
     const ey = ((Number(end[1]) || 0) - minY) / spanY;
 
+    const heightFt = Number(wall.height_ft) || 0;
+
     return {
       id: wall.id || `W${index + 1}`,
-      color: WALL_COLORS[index % WALL_COLORS.length],
+      color: getHeightColor(heightFt, minHeight, maxHeight),
       sx,
       sy,
       ex,
       ey,
       openings: wall.openings || [],
       linear_feet: wall.linear_feet,
-      net_sqft: wall.net_sqft
+      net_sqft: wall.net_sqft,
+      height_ft: heightFt
     };
   });
 }
@@ -127,6 +151,13 @@ export default function PlanOverlayViewer({ imageUrl, walls, summary }) {
       <div className="mt-4 grid md:grid-cols-2 gap-3 text-xs">
         <div className="border border-zinc-200 bg-zinc-50 p-3">
           <p className="font-semibold text-zinc-700 mb-2 uppercase tracking-wide">Legend</p>
+          <div className="mb-3">
+            <div className="h-2 rounded bg-gradient-to-r from-blue-600 to-red-500" />
+            <div className="mt-1 flex items-center justify-between text-[11px] text-zinc-500">
+              <span>Lower wall height</span>
+              <span>Higher wall height</span>
+            </div>
+          </div>
           <ul className="space-y-1">
             {overlayWalls.map((wall) => (
               <li key={`legend-${wall.id}`} className="flex items-center justify-between gap-3">
@@ -134,7 +165,7 @@ export default function PlanOverlayViewer({ imageUrl, walls, summary }) {
                   <span className="w-3 h-3 inline-block" style={{ backgroundColor: wall.color }} />
                   {wall.id}
                 </span>
-                <span className="text-zinc-600">{wall.linear_feet} ft • {wall.net_sqft} sqft</span>
+                <span className="text-zinc-600">{wall.height_ft} ft • {wall.linear_feet} ft • {wall.net_sqft} sqft</span>
               </li>
             ))}
           </ul>
