@@ -8,7 +8,7 @@ import re
 import base64
 import jwt
 import fitz
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv, dotenv_values
 from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
 
@@ -152,10 +152,10 @@ def fallback_layout(wall_height_ft: float) -> Dict[str, Any]:
     return {"walls": walls, "ceiling_height_ft": wall_height_ft, "notes": "Fallback layout generated because floor-plan geometry extraction was uncertain."}
 
 
-def normalize_takeoff_payload(raw_payload: Dict[str, Any], wall_height_ft: float) -> Dict[str, Any]:
+def normalize_takeoff_payload(raw_payload: Dict[str, Any], fallback_wall_height_ft: float = 10.0) -> Dict[str, Any]:
     source_walls = raw_payload.get("walls") or []
     if not source_walls:
-        source_walls = fallback_layout(wall_height_ft)["walls"]
+        source_walls = fallback_layout(fallback_wall_height_ft)["walls"]
 
     normalized_walls: List[Dict[str, Any]] = []
     model_walls: List[Dict[str, Any]] = []
@@ -168,7 +168,7 @@ def normalize_takeoff_payload(raw_payload: Dict[str, Any], wall_height_ft: float
     for idx, wall in enumerate(source_walls, start=1):
         wall_id = str(wall.get("id") or f"W{idx}")
         length_ft = float(wall.get("length_ft") or wall.get("linear_feet") or 0)
-        height_ft = float(wall.get("height_ft") or wall.get("ceiling_height_ft") or wall_height_ft)
+        height_ft = float(wall.get("height_ft") or wall.get("ceiling_height_ft") or raw_payload.get("ceiling_height_ft") or fallback_wall_height_ft)
 
         start = wall.get("start") or [float((idx - 1) * 10), 0.0]
         end = wall.get("end") or [float((idx - 1) * 10 + max(length_ft, 8)), 0.0]
@@ -225,7 +225,7 @@ def normalize_takeoff_payload(raw_payload: Dict[str, Any], wall_height_ft: float
             "openings": normalized_openings
         })
 
-    ceiling_height_ft = float(raw_payload.get("ceiling_height_ft") or wall_height_ft)
+    ceiling_height_ft = float(raw_payload.get("ceiling_height_ft") or (sum(w["height_ft"] for w in normalized_walls) / max(len(normalized_walls), 1)) or fallback_wall_height_ft)
 
     return {
         "summary": {
@@ -257,7 +257,7 @@ def normalize_takeoff_payload(raw_payload: Dict[str, Any], wall_height_ft: float
     }
 
 
-async def analyze_pdf_takeoff(pdf_path: Path, wall_height_ft: float) -> Dict[str, Any]:
+async def analyze_pdf_takeoff(pdf_path: Path, preferred_wall_height_ft: Optional[float] = None) -> Dict[str, Any]:
     llm_key = load_llm_key()
     if not llm_key:
         raise HTTPException(status_code=503, detail="AI service not configured")
@@ -302,11 +302,13 @@ Rules:
 - Do not invent unrealistic dimensions.
 """
 
+    default_height_ft = preferred_wall_height_ft or 10.0
     clipped_text = extracted_text[:12000] if extracted_text else "No extractable PDF text found."
     user_prompt = (
-        f"Analyze this uploaded floor plan PDF (up to first 3 pages) for ICF takeoff. "
-        f"Requested default wall height is {wall_height_ft} ft. "
-        f"Use both images and extracted text when estimating walls/openings. "
+        "Analyze this uploaded floor plan PDF (up to first 3 pages) for ICF takeoff. "
+        "Extract ceiling/wall heights from drawing notes/dimensions when available; "
+        f"if height is not visible, use {default_height_ft} ft as fallback. "
+        "Use both images and extracted text when estimating walls/openings. "
         f"Extracted text context:\n{clipped_text}\n\n"
         "Return JSON only."
     )
@@ -328,11 +330,11 @@ Rules:
 
     # If model returns no walls, attempt rule-based wall inference from PDF text before generic fallback
     if not raw_payload.get("walls"):
-        inferred_payload = infer_walls_from_dimension_text(extracted_text, wall_height_ft)
+        inferred_payload = infer_walls_from_dimension_text(extracted_text, default_height_ft)
         if inferred_payload.get("walls"):
             raw_payload = inferred_payload
 
-    normalized = normalize_takeoff_payload(raw_payload, wall_height_ft)
+    normalized = normalize_takeoff_payload(raw_payload, default_height_ft)
     normalized["analysis"] = raw_payload.get("notes") or "AI takeoff extraction completed."
     normalized["source_pages_used"] = min(len(images_b64), 3)
     return normalized
@@ -343,7 +345,7 @@ async def analyze_takeoff(
     request: Request,
     file: UploadFile = File(...),
     format: str = Form("pdf"),
-    wall_height: str = Form("10"),
+    wall_height: Optional[str] = Form(None),
     authorization: str = Header(None)
 ):
     """Analyze uploaded PDF floor plan and extract ICF takeoff metrics."""
@@ -352,12 +354,14 @@ async def analyze_takeoff(
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF floor plans are supported in Takeoff Beta.")
 
-    try:
-        wall_height_ft = float(wall_height)
-        if wall_height_ft <= 0:
-            raise ValueError
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Wall height must be a positive number in feet.")
+    preferred_height_ft: Optional[float] = None
+    if wall_height is not None and str(wall_height).strip() != "":
+        try:
+            preferred_height_ft = float(wall_height)
+            if preferred_height_ft <= 0:
+                raise ValueError
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Wall height must be a positive number in feet.")
 
     filename = f"{uuid.uuid4().hex}_{file.filename}"
     filepath = UPLOAD_DIR / filename
@@ -370,13 +374,13 @@ async def analyze_takeoff(
         backend_base_url = get_public_backend_base_url(request)
         file_url = f"{backend_base_url}/uploads/{filename}" if backend_base_url else f"/uploads/{filename}"
 
-        takeoff = await analyze_pdf_takeoff(filepath, wall_height_ft)
+        takeoff = await analyze_pdf_takeoff(filepath, preferred_height_ft)
 
         return {
             "file_url": file_url,
             "filename": filename,
             "format": format,
-            "wall_height": wall_height_ft,
+            "wall_height": takeoff.get("summary", {}).get("ceiling_height_ft"),
             "contractor_id": user_payload.get("id") if user_payload else None,
             **takeoff
         }

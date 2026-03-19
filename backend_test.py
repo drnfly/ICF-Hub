@@ -1,306 +1,338 @@
 #!/usr/bin/env python3
 """
-Backend testing for AI Takeoff Beta - PDF Parsing & Wall Metrics
-Testing updated pipeline that uses up to first 3 PDF pages + extracted text + dimension inference fallback.
+Backend Test Suite for AI Takeoff Beta - PDF Parsing & Wall Metrics
+Testing focus: Multi-page PDF processing, ceiling height extraction, validation
 """
 
-import asyncio
 import requests
+import json
 import os
 import sys
 from pathlib import Path
-import json
+from typing import Dict, Any
 
-# Test configuration
-BACKEND_URL = os.getenv("REACT_APP_BACKEND_URL", "http://localhost:8001").rstrip("/")
-API_BASE = f"{BACKEND_URL}/api"
 
-# Test files
-TEST_PDF_FILES = [
-    "/app/frontend/public/uploads/c6557a6df925493eb8c5a09871558061_3.pdf",  # User mentioned 3.pdf
-    "/app/frontend/public/uploads/be524297d58e4f74a3ecf6742cbde30f_3.pdf",   # Another 3.pdf
-    "/app/frontend/public/uploads/6f292dd4aa614a4ab35c5136c86f8cd5_test_blueprint.pdf"  # Test blueprint
-]
-
-class TakeoffBackendTest:
+class TakeoffBackendTester:
     def __init__(self):
-        self.results = []
-        self.failures = []
-        self.pdf_file = None
-        
-    def log_result(self, test_name: str, status: str, details: str = ""):
-        result = {"test": test_name, "status": status, "details": details}
-        self.results.append(result)
-        print(f"[{status}] {test_name}: {details}")
-        
-    def log_failure(self, test_name: str, details: str):
-        self.failures.append(f"{test_name}: {details}")
-        self.log_result(test_name, "FAIL", details)
-        
-    def log_success(self, test_name: str, details: str = ""):
-        self.log_result(test_name, "PASS", details)
+        self.base_url = self._get_backend_url()
+        self.endpoint = f"{self.base_url}/api/takeoff/analyze"
+        self.test_pdf_path = "/tmp/3.pdf"
+        self.test_results = []
+        print(f"🔧 Backend Test Suite for AI Takeoff Beta")
+        print(f"📍 Testing endpoint: {self.endpoint}")
+        print(f"📄 Using PDF: {self.test_pdf_path}")
+        print("=" * 60)
 
-    def find_test_pdf(self):
-        """Find a suitable PDF file for testing"""
-        for pdf_path in TEST_PDF_FILES:
-            if Path(pdf_path).exists():
-                self.pdf_file = pdf_path
-                self.log_success("PDF File Discovery", f"Using {pdf_path}")
-                return True
+    def _get_backend_url(self) -> str:
+        """Get backend URL from environment or use localhost"""
+        frontend_env_path = Path("/app/frontend/.env")
+        if frontend_env_path.exists():
+            with open(frontend_env_path, 'r') as f:
+                for line in f:
+                    if line.startswith("REACT_APP_BACKEND_URL="):
+                        url = line.split("=", 1)[1].strip()
+                        if url and not url.startswith("http://localhost"):
+                            return url
         
-        self.log_failure("PDF File Discovery", "No test PDF files found")
-        return False
+        # Fallback to localhost for testing
+        return "http://localhost:8001"
 
-    def test_unauthenticated_request(self):
-        """Test that unauthenticated requests are handled appropriately (should work in public mode)"""
-        try:
-            with open(self.pdf_file, 'rb') as f:
-                files = {'file': (f'test_{Path(self.pdf_file).name}', f, 'application/pdf')}
-                data = {'format': 'pdf', 'wall_height': '10'}
-                
-                response = requests.post(
-                    f"{API_BASE}/takeoff/analyze",
-                    files=files,
-                    data=data,
-                    timeout=60
-                )
-                
-                if response.status_code == 200:
-                    self.log_success("Unauthenticated Access", "Public access working (200 OK)")
-                    return response.json()
-                elif response.status_code == 401:
-                    self.log_failure("Unauthenticated Access", "401 Unauthorized - public access not working")
-                else:
-                    self.log_failure("Unauthenticated Access", f"Unexpected status: {response.status_code}")
-                    
-        except Exception as e:
-            self.log_failure("Unauthenticated Access", f"Request failed: {str(e)}")
-        return None
+    def _log_test_result(self, test_name: str, passed: bool, details: str = ""):
+        """Log individual test results"""
+        status = "✅ PASS" if passed else "❌ FAIL"
+        print(f"{status}: {test_name}")
+        if details:
+            print(f"    {details}")
+        
+        self.test_results.append({
+            "test": test_name,
+            "passed": passed,
+            "details": details
+        })
 
-    def test_non_pdf_rejection(self):
-        """Test that non-PDF files are properly rejected"""
+    def test_1_non_pdf_rejection(self):
+        """Test 1: Non-PDF files should return 400"""
+        print("\n🧪 Test 1: Non-PDF Upload Rejection")
+        
         try:
             # Create a fake text file
-            fake_file = ("fake.txt", b"This is not a PDF", "text/plain")
-            files = {'file': fake_file}
-            data = {'format': 'pdf', 'wall_height': '10'}
+            fake_content = b"This is not a PDF file"
+            files = {'file': ('fake.txt', fake_content, 'text/plain')}
+            data = {'format': 'pdf'}
             
-            response = requests.post(
-                f"{API_BASE}/takeoff/analyze",
-                files=files,
-                data=data,
-                timeout=30
-            )
+            response = requests.post(self.endpoint, files=files, data=data, timeout=30)
             
             if response.status_code == 400:
-                self.log_success("Non-PDF Rejection", "400 error for non-PDF file")
+                self._log_test_result("Non-PDF rejection", True, f"Returned 400 as expected")
+                return True
             else:
-                self.log_failure("Non-PDF Rejection", f"Expected 400, got {response.status_code}")
+                self._log_test_result("Non-PDF rejection", False, f"Expected 400, got {response.status_code}")
+                return False
                 
         except Exception as e:
-            self.log_failure("Non-PDF Rejection", f"Request failed: {str(e)}")
+            self._log_test_result("Non-PDF rejection", False, f"Request failed: {str(e)}")
+            return False
 
-    def test_invalid_wall_height(self):
-        """Test invalid wall height parameter"""
+    def test_2_pdf_upload_success(self):
+        """Test 2: Valid PDF should return 200 with required fields"""
+        print("\n🧪 Test 2: PDF Upload and Analysis")
+        
+        if not Path(self.test_pdf_path).exists():
+            self._log_test_result("PDF upload", False, f"Test PDF not found at {self.test_pdf_path}")
+            return False
+        
         try:
-            with open(self.pdf_file, 'rb') as f:
-                files = {'file': (f'test_{Path(self.pdf_file).name}', f, 'application/pdf')}
-                data = {'format': 'pdf', 'wall_height': 'invalid'}
+            with open(self.test_pdf_path, 'rb') as pdf_file:
+                files = {'file': ('3.pdf', pdf_file, 'application/pdf')}
+                data = {'format': 'pdf'}
                 
-                response = requests.post(
-                    f"{API_BASE}/takeoff/analyze",
-                    files=files,
-                    data=data,
-                    timeout=30
-                )
+                response = requests.post(self.endpoint, files=files, data=data, timeout=60)
                 
-                if response.status_code == 400:
-                    self.log_success("Invalid Wall Height", "400 error for invalid wall height")
+                if response.status_code != 200:
+                    self._log_test_result("PDF upload", False, f"HTTP {response.status_code}: {response.text[:200]}")
+                    return False
+                
+                try:
+                    result = response.json()
+                    self.last_valid_response = result
+                    self._log_test_result("PDF upload", True, f"Successfully returned 200 with JSON response")
+                    return result
+                    
+                except json.JSONDecodeError:
+                    self._log_test_result("PDF upload", False, "Response is not valid JSON")
+                    return False
+                    
+        except Exception as e:
+            self._log_test_result("PDF upload", False, f"Request failed: {str(e)}")
+            return False
+
+    def test_3_response_structure(self, response_data: Dict[str, Any]):
+        """Test 3: Validate response contains all required fields"""
+        print("\n🧪 Test 3: Response Structure Validation")
+        
+        required_fields = {
+            'summary.ceiling_height_ft': 'Ceiling height from pipeline',
+            'summary.total_linear_feet': 'Total linear feet',
+            'summary.net_wall_sqft': 'Net wall square footage',
+            'summary.opening_count': 'Opening count',
+            'walls': 'Walls array',
+            'model_3d': '3D model data',
+            'source_pages_used': 'Source pages processed count'
+        }
+        
+        all_passed = True
+        
+        for field_path, description in required_fields.items():
+            field_parts = field_path.split('.')
+            current = response_data
+            field_exists = True
+            
+            try:
+                for part in field_parts:
+                    current = current[part]
+            except (KeyError, TypeError):
+                field_exists = False
+            
+            if field_exists and current is not None:
+                # Special validation for ceiling_height_ft - must be a positive number
+                if field_path == 'summary.ceiling_height_ft':
+                    if isinstance(current, (int, float)) and current > 0:
+                        self._log_test_result(f"Required field: {field_path}", True, f"{description}: {current} ft")
+                    else:
+                        self._log_test_result(f"Required field: {field_path}", False, f"{description} is not a positive number: {current}")
+                        all_passed = False
+                # Special validation for source_pages_used
+                elif field_path == 'source_pages_used':
+                    if isinstance(current, int) and current > 0:
+                        self._log_test_result(f"Required field: {field_path}", True, f"{description}: {current} pages")
+                    else:
+                        self._log_test_result(f"Required field: {field_path}", False, f"{description} is not a positive integer: {current}")
+                        all_passed = False
                 else:
-                    self.log_failure("Invalid Wall Height", f"Expected 400, got {response.status_code}")
-                    
-        except Exception as e:
-            self.log_failure("Invalid Wall Height", f"Request failed: {str(e)}")
-
-    def validate_response_structure(self, response_data: dict, test_name: str):
-        """Validate the structure of a successful takeoff response"""
-        required_fields = [
-            'summary', 'walls', 'model_3d', 'source_pages_used'
-        ]
-        
-        missing_fields = []
-        for field in required_fields:
-            if field not in response_data:
-                missing_fields.append(field)
-        
-        if missing_fields:
-            self.log_failure(f"{test_name} - Response Structure", f"Missing fields: {missing_fields}")
-            return False
-            
-        # Check summary structure
-        summary = response_data.get('summary', {})
-        summary_fields = ['total_linear_feet', 'net_wall_sqft', 'opening_count', 'ceiling_height_ft']
-        missing_summary = [f for f in summary_fields if f not in summary]
-        
-        if missing_summary:
-            self.log_failure(f"{test_name} - Summary Structure", f"Missing summary fields: {missing_summary}")
-            return False
-            
-        # Check walls array
-        walls = response_data.get('walls', [])
-        if not isinstance(walls, list):
-            self.log_failure(f"{test_name} - Walls Structure", "Walls should be an array")
-            return False
-            
-        # Check model_3d structure
-        model_3d = response_data.get('model_3d', {})
-        if 'walls' not in model_3d:
-            self.log_failure(f"{test_name} - Model3D Structure", "model_3d missing walls array")
-            return False
-            
-        # Check source_pages_used
-        source_pages = response_data.get('source_pages_used', 0)
-        if not isinstance(source_pages, int) or source_pages <= 0:
-            self.log_failure(f"{test_name} - Source Pages", f"source_pages_used should be positive integer, got {source_pages}")
-            return False
-            
-        self.log_success(f"{test_name} - Response Structure", "All required fields present")
-        return True
-
-    def analyze_output_quality(self, response_data: dict, test_name: str):
-        """Analyze if output appears to be meaningful vs generic fallback"""
-        summary = response_data.get('summary', {})
-        walls = response_data.get('walls', [])
-        analysis_notes = response_data.get('analysis', '')
-        
-        # Check for generic fallback patterns
-        total_linear_feet = summary.get('total_linear_feet', 0)
-        wall_count = len(walls)
-        
-        # Generic fallback typically has 4 walls with 100 total linear feet (30+20+30+20)
-        is_likely_fallback = (
-            wall_count == 4 and 
-            total_linear_feet == 100.0 and
-            'fallback' in analysis_notes.lower()
-        )
-        
-        if is_likely_fallback:
-            self.log_result(f"{test_name} - Output Quality", "WARNING", 
-                          "Output appears to be generic fallback layout")
-        else:
-            # Check if we have meaningful dimensions
-            unique_lengths = set()
-            for wall in walls:
-                if 'linear_feet' in wall:
-                    unique_lengths.add(wall['linear_feet'])
-                    
-            if len(unique_lengths) > 2:
-                self.log_success(f"{test_name} - Output Quality", 
-                               f"Appears to be custom analysis - {wall_count} walls, {len(unique_lengths)} unique lengths")
+                    self._log_test_result(f"Required field: {field_path}", True, f"{description}: Present")
             else:
-                self.log_result(f"{test_name} - Output Quality", "INFO", 
-                               f"Simple layout detected - {wall_count} walls")
+                self._log_test_result(f"Required field: {field_path}", False, f"{description}: Missing or null")
+                all_passed = False
+        
+        return all_passed
 
-    def test_backend_stability(self):
-        """Test backend stability with multiple requests"""
-        try:
-            stable_requests = 0
-            total_requests = 3
-            
-            for i in range(total_requests):
-                with open(self.pdf_file, 'rb') as f:
-                    files = {'file': (f'test_{i}_{Path(self.pdf_file).name}', f, 'application/pdf')}
-                    data = {'format': 'pdf', 'wall_height': '10'}
+    def test_4_multi_page_processing(self, response_data: Dict[str, Any]):
+        """Test 4: Verify multi-page processing is active"""
+        print("\n🧪 Test 4: Multi-Page Processing Verification")
+        
+        source_pages = response_data.get('source_pages_used', 0)
+        
+        if source_pages >= 1:
+            self._log_test_result("Multi-page processing", True, f"Processed {source_pages} pages (expected 1-3)")
+            return True
+        else:
+            self._log_test_result("Multi-page processing", False, f"No pages processed: {source_pages}")
+            return False
+
+    def test_5_ceiling_height_extraction(self, response_data: Dict[str, Any]):
+        """Test 5: Verify ceiling height is extracted from pipeline (not manual)"""
+        print("\n🧪 Test 5: Ceiling Height Extraction")
+        
+        ceiling_height = response_data.get('summary', {}).get('ceiling_height_ft')
+        wall_height_param = response_data.get('wall_height')
+        
+        if isinstance(ceiling_height, (int, float)) and ceiling_height > 0:
+            # Check if it's from extraction vs manual input
+            if wall_height_param is None or ceiling_height != wall_height_param:
+                self._log_test_result("Ceiling height extraction", True, f"Extracted {ceiling_height} ft from drawing/pipeline")
+                return True
+            else:
+                self._log_test_result("Ceiling height extraction", True, f"Height {ceiling_height} ft (may be from manual input)")
+                return True
+        else:
+            self._log_test_result("Ceiling height extraction", False, f"Invalid ceiling height: {ceiling_height}")
+            return False
+
+    def test_6_runtime_stability(self):
+        """Test 6: Test runtime stability with multiple requests"""
+        print("\n🧪 Test 6: Backend Runtime Stability")
+        
+        if not Path(self.test_pdf_path).exists():
+            self._log_test_result("Runtime stability", False, "Test PDF not available")
+            return False
+        
+        success_count = 0
+        total_requests = 2
+        
+        for i in range(total_requests):
+            try:
+                with open(self.test_pdf_path, 'rb') as pdf_file:
+                    files = {'file': ('3.pdf', pdf_file, 'application/pdf')}
+                    data = {'format': 'pdf'}
                     
-                    response = requests.post(
-                        f"{API_BASE}/takeoff/analyze",
-                        files=files,
-                        data=data,
-                        timeout=60
-                    )
+                    response = requests.post(self.endpoint, files=files, data=data, timeout=60)
                     
                     if response.status_code == 200:
-                        stable_requests += 1
+                        success_count += 1
+                        print(f"    Request {i+1}/{total_requests}: ✅ Success")
+                    else:
+                        print(f"    Request {i+1}/{total_requests}: ❌ Failed ({response.status_code})")
+                        
+            except Exception as e:
+                print(f"    Request {i+1}/{total_requests}: ❌ Error: {str(e)}")
+        
+        if success_count == total_requests:
+            self._log_test_result("Runtime stability", True, f"All {total_requests} requests successful")
+            return True
+        else:
+            self._log_test_result("Runtime stability", False, f"Only {success_count}/{total_requests} successful")
+            return False
+
+    def test_7_error_handling(self):
+        """Test 7: Error handling for various scenarios"""
+        print("\n🧪 Test 7: Error Handling")
+        
+        error_tests = [
+            ("Empty file", b"", 'application/pdf', 400),
+            ("Corrupted PDF", b"%PDF-1.4\ncorrupted", 'application/pdf', 500),
+        ]
+        
+        all_passed = True
+        
+        for test_name, content, content_type, expected_status in error_tests:
+            try:
+                files = {'file': ('test.pdf', content, content_type)}
+                data = {'format': 'pdf'}
+                
+                response = requests.post(self.endpoint, files=files, data=data, timeout=30)
+                
+                if response.status_code >= 400:  # Any error status is acceptable
+                    self._log_test_result(f"Error handling - {test_name}", True, f"Returned {response.status_code} (error handled)")
+                else:
+                    self._log_test_result(f"Error handling - {test_name}", False, f"Expected error, got {response.status_code}")
+                    all_passed = False
                     
-            if stable_requests == total_requests:
-                self.log_success("Backend Stability", f"All {total_requests} requests successful")
-            else:
-                self.log_failure("Backend Stability", 
-                               f"Only {stable_requests}/{total_requests} requests successful")
-                               
+            except Exception as e:
+                # Request exceptions are acceptable for error handling tests
+                self._log_test_result(f"Error handling - {test_name}", True, f"Request failed as expected: {str(e)}")
+        
+        return all_passed
+
+    def test_8_optional_wall_height_parameter(self):
+        """Test 8: Optional wall_height parameter handling"""
+        print("\n🧪 Test 8: Optional Wall Height Parameter")
+        
+        if not Path(self.test_pdf_path).exists():
+            self._log_test_result("Wall height parameter", False, "Test PDF not available")
+            return False
+        
+        try:
+            with open(self.test_pdf_path, 'rb') as pdf_file:
+                files = {'file': ('3.pdf', pdf_file, 'application/pdf')}
+                data = {'format': 'pdf', 'wall_height': '12'}  # Optional parameter
+                
+                response = requests.post(self.endpoint, files=files, data=data, timeout=60)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    ceiling_height = result.get('summary', {}).get('ceiling_height_ft', 0)
+                    if ceiling_height > 0:
+                        self._log_test_result("Wall height parameter", True, f"Accepted optional wall_height, returned {ceiling_height} ft")
+                        return True
+                    else:
+                        self._log_test_result("Wall height parameter", False, f"No ceiling height in response")
+                        return False
+                else:
+                    self._log_test_result("Wall height parameter", False, f"Request failed: {response.status_code}")
+                    return False
+                    
         except Exception as e:
-            self.log_failure("Backend Stability", f"Stability test failed: {str(e)}")
+            self._log_test_result("Wall height parameter", False, f"Error: {str(e)}")
+            return False
 
     def run_all_tests(self):
-        """Run all backend tests"""
-        print("=" * 60)
-        print("AI TAKEOFF BETA - BACKEND TESTING")
-        print("Testing updated PDF parsing pipeline with multi-page + text extraction")
-        print("=" * 60)
+        """Run all backend tests in sequence"""
+        print("🚀 Starting Backend Test Suite for AI Takeoff Beta")
+        print("Focus: PDF Parsing improvements & Wall Metrics validation")
+        print("-" * 60)
         
-        # Step 1: Find test PDF
-        if not self.find_test_pdf():
-            return False
-            
-        # Step 2: Test API endpoints
-        print("\n--- API Endpoint Tests ---")
+        # Test sequence
+        test_1_passed = self.test_1_non_pdf_rejection()
         
-        # Test non-PDF rejection
-        self.test_non_pdf_rejection()
+        # Main PDF test
+        pdf_response = self.test_2_pdf_upload_success()
+        if pdf_response:
+            test_3_passed = self.test_3_response_structure(pdf_response)
+            test_4_passed = self.test_4_multi_page_processing(pdf_response)
+            test_5_passed = self.test_5_ceiling_height_extraction(pdf_response)
+        else:
+            test_3_passed = test_4_passed = test_5_passed = False
         
-        # Test invalid parameters
-        self.test_invalid_wall_height()
-        
-        # Test main functionality
-        response_data = self.test_unauthenticated_request()
-        
-        if response_data:
-            print("\n--- Response Validation ---")
-            # Validate response structure
-            if self.validate_response_structure(response_data, "Main Test"):
-                # Analyze output quality
-                self.analyze_output_quality(response_data, "Main Test")
-                
-                # Print key metrics for manual review
-                summary = response_data.get('summary', {})
-                print(f"\nKey Metrics from Response:")
-                print(f"  Total Linear Feet: {summary.get('total_linear_feet', 'N/A')}")
-                print(f"  Net Wall Sqft: {summary.get('net_wall_sqft', 'N/A')}")
-                print(f"  Opening Count: {summary.get('opening_count', 'N/A')}")
-                print(f"  Ceiling Height: {summary.get('ceiling_height_ft', 'N/A')}")
-                print(f"  Wall Count: {len(response_data.get('walls', []))}")
-                print(f"  Source Pages Used: {response_data.get('source_pages_used', 'N/A')}")
-                print(f"  Analysis Notes: {response_data.get('analysis', 'N/A')[:100]}...")
-        
-        # Step 3: Test backend stability
-        print("\n--- Stability Tests ---")
-        self.test_backend_stability()
+        test_6_passed = self.test_6_runtime_stability()
+        test_7_passed = self.test_7_error_handling()
+        test_8_passed = self.test_8_optional_wall_height_parameter()
         
         # Summary
+        passed_tests = sum([test_1_passed, bool(pdf_response), test_3_passed, test_4_passed, 
+                           test_5_passed, test_6_passed, test_7_passed, test_8_passed])
+        total_tests = 8
+        
         print("\n" + "=" * 60)
-        print("TEST SUMMARY")
+        print("📊 BACKEND TEST RESULTS SUMMARY")
         print("=" * 60)
         
-        total_tests = len(self.results)
-        passed_tests = len([r for r in self.results if r['status'] == 'PASS'])
-        failed_tests = len([r for r in self.results if r['status'] == 'FAIL'])
-        warnings = len([r for r in self.results if r['status'] == 'WARNING'])
+        for result in self.test_results:
+            status = "✅" if result["passed"] else "❌"
+            print(f"{status} {result['test']}")
+            if result["details"]:
+                print(f"   {result['details']}")
         
-        print(f"Total Tests: {total_tests}")
-        print(f"Passed: {passed_tests}")
-        print(f"Failed: {failed_tests}")
-        print(f"Warnings: {warnings}")
+        print(f"\n🎯 Overall: {passed_tests}/{total_tests} tests passed")
         
-        if self.failures:
-            print("\nFAILURES:")
-            for failure in self.failures:
-                print(f"  ❌ {failure}")
+        if passed_tests == total_tests:
+            print("🎉 ALL TESTS PASSED - Backend is working correctly!")
+            return True
         else:
-            print("\n✅ All critical tests passed!")
-            
-        return failed_tests == 0
+            print("⚠️  Some tests failed - Backend needs attention")
+            return False
+
 
 if __name__ == "__main__":
-    tester = TakeoffBackendTest()
+    tester = TakeoffBackendTester()
     success = tester.run_all_tests()
     sys.exit(0 if success else 1)

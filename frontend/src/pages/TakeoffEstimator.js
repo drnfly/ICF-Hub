@@ -14,7 +14,6 @@ export default function TakeoffEstimator() {
   const [projectName, setProjectName] = useState("");
   const [blockMfg, setBlockMfg] = useState(BLOCK_OPTIONS[0]);
   const [coreSize, setCoreSize] = useState(CORE_OPTIONS[1]);
-  const [wallHeight, setWallHeight] = useState("10");
 
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -90,7 +89,6 @@ export default function TakeoffEstimator() {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("format", "pdf");
-    formData.append("wall_height", wallHeight || "10");
     formData.append("project_name", projectName || "Untitled Project");
     formData.append("block_mfg", blockMfg);
     formData.append("core_size", coreSize);
@@ -111,7 +109,6 @@ export default function TakeoffEstimator() {
         const fallbackFormData = new FormData();
         fallbackFormData.append("file", file);
         fallbackFormData.append("format", "pdf");
-        fallbackFormData.append("wall_height", wallHeight || "10");
         fallbackFormData.append("project_name", projectName || "Untitled Project");
         fallbackFormData.append("block_mfg", blockMfg);
         fallbackFormData.append("core_size", coreSize);
@@ -204,18 +201,6 @@ export default function TakeoffEstimator() {
                     <input type="file" accept="application/pdf,.pdf" onChange={handleFileUpload} className="text-sm w-full" />
                     {file && <p className="mt-2 text-xs text-zinc-600">Selected: {file.name}</p>}
                   </div>
-                </div>
-
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-500 mb-2">Ceiling Height (ft)</p>
-                  <input
-                    type="number"
-                    min="8"
-                    max="24"
-                    value={wallHeight}
-                    onChange={(e) => setWallHeight(e.target.value)}
-                    className="w-full h-11 px-3 border border-zinc-300 bg-zinc-50 text-sm outline-none focus:ring-2 focus:ring-orange-200"
-                  />
                 </div>
 
                 {error && (
