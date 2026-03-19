@@ -306,11 +306,11 @@ frontend:
 
   - task: "Takeoff Beta Tab Relabel + Contractor UI + 3D Layout"
     implemented: true
-    working: "NA"
+    working: false
     file: "/app/frontend/src/pages/TakeoffEstimator.js"
-    stuck_count: 3
+    stuck_count: 4
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: true
           agent: "main"
@@ -344,6 +344,10 @@ frontend:
           agent: "main"
           timestamp: "2026-03-14T09:06:00Z"
           comment: "Applied user-requested open access: removed contractor-only gate in TakeoffEstimator, made takeoff API calls work without auth token, and added explicit TAKEOFF BETA action button in navbar right-side controls for guests to ensure visibility/access. Ready for frontend retest using user PDF."
+        - working: false
+          agent: "testing"
+          timestamp: "2026-03-19T01:56:00Z"
+          comment: "❌ CRITICAL: TAKEOFF BETA comprehensive UI testing with /tmp/3.pdf completed. RESULTS BREAKDOWN: ✅ PASSED (9/12 criteria): 1) Navbar 'TAKEOFF BETA' link present and working 2) Page loads at /tools/takeoff-beta correctly 3) All required fields present: Project Name, Block MFG dropdown (Nudura, Fox Blocks, Amvic, BuildBlock, Logix), Core Size dropdown (4 in, 6 in, 8 in, 10 in, 12 in), Upload Plans (PDF), Ceiling Height 4) Both buttons present: Start Automatic Takeoff, Leave Feedback 5) Right panel Beta Status complete with Version (0.1-beta), Access (Open to All), Pricing (Free During Beta), Feedback Loop (Weekly Triage) 6) Upload validation working: Non-PDF files rejected with error 'Please upload a PDF floor plan.' 7) Valid PDF (3.pdf) accepted and filename displayed 8) Form filling functional (project name, dropdowns, ceiling height) 9) Backend API SUCCESS: POST /api/takeoff/analyze returned 200 with complete data: summary (total_linear_feet: 140.0, net_wall_sqft: 1400.0, opening_count: 0, ceiling_height_ft: 10.0), walls array (4 walls), model_3d object present. ❌ FAILED (3/12 criteria - CRITICAL BLOCKER): 10) Summary metric cards NOT RENDERED (Total Linear Feet, Net Wall Sqft, Openings, Ceiling Heights all missing) 11) Parsed walls table NOT RENDERED (no table, no heading) 12) 3D Model Layout section NOT RENDERED (no canvas, no heading). ROOT CAUSE: React Three Fiber crash - Error 'R3F: Span is not part of the THREE namespace! Did you forget to extend?' Console shows Emergent visual editor injecting <span> wrappers (x-file-name, x-dynamic attributes) inside Three.js Canvas component. When TakeoffEstimator renders results after API success, the Takeoff3DViewer Canvas crashes because THREE.js cannot render HTML span elements. Canvas crash prevents entire results section (summary cards + table + 3D viewer) from mounting. ENVIRONMENT ISSUE: Development preview tooling interferes with react-three-fiber rendering. Code structure is correct (API returns data, component logic sound), but visual editor spans break Three.js. SECONDARY ISSUES: THREE.Clock deprecation warning, WebGL context lost (consequence of crash), HTML hydration warnings from injected spans."
 
 metadata:
   created_by: "testing_agent"
@@ -363,6 +367,12 @@ test_plan:
   test_completed: false
 
 agent_communication:
+    - agent: "testing"
+      timestamp: "2026-03-19T01:58:00Z"
+      message: "🔴 TAKEOFF BETA TESTING COMPLETE - CRITICAL BLOCKER IDENTIFIED. Comprehensive UI testing with /tmp/3.pdf executed successfully through all stages. SUMMARY: ✅ 9/12 test criteria PASSED (page structure, fields, buttons, upload validation, API call). ❌ 3/12 FAILED - Results rendering completely blocked. CRITICAL ISSUE: React Three Fiber crash prevents ALL results from displaying (summary cards, walls table, 3D viewer). Error: 'R3F: Span is not part of the THREE namespace!' ROOT CAUSE: Emergent visual editor injects <span> wrappers (x-file-name, x-dynamic attributes) into React components. When TakeoffEstimator renders Takeoff3DViewer after successful API call, these wrapper spans get rendered inside THREE.js Canvas, causing crash. THREE.js cannot render HTML elements, only 3D objects. EVIDENCE: API returned complete data (summary metrics, 4 walls, model_3d object), but UI crash prevents component mounting. This is ENVIRONMENT ISSUE (preview tooling interference), NOT CODE ISSUE. Backend 100% functional, frontend logic correct, but development environment breaks react-three-fiber. RECOMMENDATION: Main agent must either 1) Add error boundary to gracefully handle Three.js crashes OR 2) Conditionally disable 3D viewer in preview environments OR 3) Investigate alternative 3D rendering that's compatible with visual editor tooling. Currently BLOCKING production deployment of takeoff results display."
+    - agent: "main"
+      timestamp: "2026-03-14T10:55:00Z"
+      message: "User approved frontend testing for redesigned TAKEOFF BETA page. Requesting end-to-end UI validation using /tmp/3.pdf for upload and takeoff execution."
     - agent: "testing"
       timestamp: "2026-03-14T09:44:00Z"
       message: "🎉 DEPLOYMENT HARDENING & TAKEOFF BETA RETEST COMPLETE - ALL TESTS PASSED! Successfully validated deployment readiness hardening changes and AI Takeoff Beta functionality. KEY FINDINGS: ✅ Backend startup stable, no crashes ✅ Environment loading with override=False working correctly ✅ Takeoff endpoint now supports both public access (no auth) and contractor authentication ✅ All required metrics returned correctly ✅ Critical APIs responsive (health, auth, profile) ✅ No hardcoded fallback secrets ✅ HubSpot redirects using dynamic origins FIXED ONE BUG: Added missing load_dotenv() call in takeoff route for proper JWT_SECRET loading. All deployment blockers resolved - system ready for production deployment. No remaining issues detected."
