@@ -332,6 +332,10 @@ frontend:
           agent: "main"
           timestamp: "2026-03-14T08:58:00Z"
           comment: "Replaced testing-agent hardcoded localhost fallback with routing-safe relative fallback (/api/*). Current strategy: try REACT_APP_BACKEND_URL first, then retry relative /api endpoint on 404 so browser can use same-origin ingress path. This avoids hardcoded host/port and aligns with environment routing rules. Ready for frontend re-validation."
+        - working: true
+          agent: "main"
+          timestamp: "2026-03-14T10:53:00Z"
+          comment: "Rebuilt TakeoffEstimator UI to closely match requested reference layout at /tools/takeoff-beta with required options: Project Name, Block MFG dropdown, Core Size dropdown, PDF upload, Start Automatic Takeoff, and Leave Feedback; retained functional takeoff execution and output sections. Removed duplicate navbar TAKEOFF BETA action so top nav matches target structure."
         - working: false
           agent: "testing"
           timestamp: "2026-03-14T09:07:00Z"
