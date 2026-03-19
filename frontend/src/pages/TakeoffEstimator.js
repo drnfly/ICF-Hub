@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Loader2, ArrowUpRight, ArrowRight, Ruler, Building2, ScanLine, Sparkles } from "lucide-react";
-import Takeoff3DViewer from "@/components/Takeoff3DViewer";
+import PlanOverlayViewer from "@/components/PlanOverlayViewer";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -57,7 +57,6 @@ export default function TakeoffEstimator() {
 
   const summary = useMemo(() => analysis?.summary || null, [analysis]);
   const walls = useMemo(() => analysis?.walls || [], [analysis]);
-  const model3d = useMemo(() => analysis?.model_3d || null, [analysis]);
 
   const handleFileUpload = (event) => {
     const selectedFile = event.target.files?.[0];
@@ -95,7 +94,7 @@ export default function TakeoffEstimator() {
 
     try {
       const phaseTimer = setTimeout(() => {
-        setLoadingMessage("Parsing walls, openings, and generating 3D wall layout...");
+        setLoadingMessage("Parsing walls, openings, and generating plan overlay...");
       }, 600);
 
       const primaryBase = (BACKEND_URL || "").replace(/\/$/, "");
@@ -161,7 +160,7 @@ export default function TakeoffEstimator() {
                 <span className="text-orange-500">ESTIMATOR.</span>
               </h1>
               <p className="mt-5 text-zinc-700 max-w-2xl text-lg">
-                Early access for production takeoffs. Upload floor plan PDFs, parse wall geometry, and get instant wall metrics with 3D wall layout.
+                Early access for production takeoffs. Upload floor plan PDFs, parse wall geometry, and get instant wall metrics with plan overlay markup.
               </p>
             </div>
 
@@ -259,10 +258,11 @@ export default function TakeoffEstimator() {
               <MetricCard icon={Sparkles} label="Ceiling Heights" value={`${summary.ceiling_height_ft} ft`} />
             </div>
 
-            <div className="border border-zinc-300 bg-white p-6">
-              <h2 className="font-semibold text-zinc-900 mb-3">3D Model Layout of Walls</h2>
-              <Takeoff3DViewer model3d={model3d} />
-            </div>
+            <PlanOverlayViewer
+              imageUrl={analysis?.preview_image_url || analysis?.file_url}
+              walls={walls}
+              summary={summary}
+            />
 
             <div className="border border-zinc-300 bg-white p-6 overflow-x-auto">
               <h2 className="font-semibold text-zinc-900 mb-4">Parsed Walls</h2>

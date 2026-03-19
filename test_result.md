@@ -200,6 +200,10 @@ backend:
           timestamp: "2026-03-19T03:29:00Z"
           comment: "Improved PDF parsing pipeline for takeoff accuracy: now processes up to first 3 PDF pages as images, includes extracted PDF text context in LLM prompt, and adds dimension-text inference fallback for wall lengths before generic fallback layout. Goal is better plan reading vs prior first-page-only extraction."
         - working: true
+          agent: "main"
+          timestamp: "2026-03-19T04:13:00Z"
+          comment: "Implemented overlay-ready takeoff response and ceiling-height extraction workflow: preview image generation from PDF first page, preview_image_url/size returned in API, optional wall_height input (no longer required), and wall height now derived from drawing analysis with fallback only when unavailable."
+        - working: true
           agent: "testing"
           timestamp: "2026-03-19T04:15:00Z"
           comment: "✅ PDF PARSING IMPROVEMENTS VALIDATED: Comprehensive testing of updated takeoff pipeline confirms all improvements working correctly. Key findings: 1) Multi-page processing ACTIVE - tested 11-page PDF, confirmed 3 pages processed (source_pages_used=3) ✅ 2) POST /api/takeoff/analyze returns 200 for valid PDFs with complete response structure ✅ 3) All required fields present: summary (total_linear_feet, net_wall_sqft, opening_count, ceiling_height_ft), walls[], model_3d, source_pages_used ✅ 4) Non-PDF rejection working (400 error) ✅ 5) Backend stability confirmed with multiple requests ✅ 6) Analysis quality appears custom rather than generic fallback - test results show varied wall counts (4-6 walls) and realistic dimensions (288-320 linear feet vs generic 100) ✅ 7) Extracted text and dimension inference working - analysis notes reference specific dimensions from PDF text ✅ 8) PyMuPDF multi-page image processing stable with no runtime crashes ✅. Pipeline improvements successfully address user issue of 'not reading plans from PDF properly' - now processes up to 3 pages with text context for better accuracy."
@@ -207,6 +211,10 @@ backend:
           agent: "testing"
           timestamp: "2026-03-19T17:45:00Z"
           comment: "✅ RETEST COMPLETE - ALL TAKEOFF IMPROVEMENTS CONFIRMED WORKING: Conducted comprehensive backend retest after latest changes using /tmp/3.pdf. Perfect results: 1) API endpoint returns 200 and stable ✅ 2) summary.ceiling_height_ft present and extracted (10.0 ft) ✅ 3) source_pages_used field present (1 page processed for single-page PDF) ✅ 4) No runtime errors or NameError/undefined variables ✅ 5) Non-PDF rejection returns 400 as expected ✅ 6) Multi-page processing active (up to 3 pages) ✅ 7) Extracted PDF text integration working - analysis shows dimension reading from plans ✅ 8) Dimension-text inference fallback operational ✅ 9) Optional wall_height parameter handling correct ✅ 10) Backend runtime stability confirmed (2/2 requests successful) ✅ 11) Error handling robust for corrupted/empty files ✅ All 8 comprehensive tests passed. Response includes detailed wall analysis (289 linear feet, 4 walls, 11 openings) with proper 3D model coordinates. The latest improvements for better PDF reading quality, ceiling height extraction from drawings, and multi-page processing are fully functional and production-ready."
+        - working: true
+          agent: "testing"
+          timestamp: "2026-03-19T04:18:00Z"
+          comment: "✅ OVERLAY PREVIEW FEATURES VALIDATION COMPLETE - ALL 6 TESTS PASSED: Comprehensive testing of latest overlay-ready takeoff changes using /tmp/3.pdf confirms all requested features working perfectly. OVERLAY FEATURES VALIDATED: 1) preview_image_url field returned correctly (PNG upload path) ✅ 2) preview_width (1743px) and preview_height (1347px) fields present and valid ✅ 3) Preview image accessible at generated URL (229KB PNG file) ✅ CORE FUNCTIONALITY CONFIRMED: 4) wall_height parameter fully optional - works with/without (10.0ft vs 12.0ft) ✅ 5) ceiling_height_ft extracted from analysis and returned in summary ✅ 6) Complete response structure: summary (total_linear_feet: 320, net_wall_sqft: 2619, opening_count: 25), walls array (4 walls), model_3d object, source_pages_used (1) ✅ API VALIDATION: 7) Non-PDF rejection returns 400 correctly ✅ 8) No runtime errors in backend logs ✅ 9) Backend stability with external URL accessible ✅ The overlay-ready takeoff implementation with PDF first-page preview generation is fully functional and production-ready. All overlay visualization requirements met."
 
 
   - task: "Deployment Readiness Hardening"
@@ -358,6 +366,10 @@ frontend:
           comment: "Applied user-requested open access: removed contractor-only gate in TakeoffEstimator, made takeoff API calls work without auth token, and added explicit TAKEOFF BETA action button in navbar right-side controls for guests to ensure visibility/access. Ready for frontend retest using user PDF."
         - working: false
           agent: "testing"
+        - working: true
+          agent: "main"
+          timestamp: "2026-03-19T04:13:00Z"
+          comment: "Removed 3D model section and replaced with plan overlay visualization on uploaded plan image (colored wall traces + opening markers + legend), matching user request. Also removed manual ceiling height input from UI."
           timestamp: "2026-03-19T01:56:00Z"
           comment: "❌ CRITICAL: TAKEOFF BETA comprehensive UI testing with /tmp/3.pdf completed. RESULTS BREAKDOWN: ✅ PASSED (9/12 criteria): 1) Navbar 'TAKEOFF BETA' link present and working 2) Page loads at /tools/takeoff-beta correctly 3) All required fields present: Project Name, Block MFG dropdown (Nudura, Fox Blocks, Amvic, BuildBlock, Logix), Core Size dropdown (4 in, 6 in, 8 in, 10 in, 12 in), Upload Plans (PDF), Ceiling Height 4) Both buttons present: Start Automatic Takeoff, Leave Feedback 5) Right panel Beta Status complete with Version (0.1-beta), Access (Open to All), Pricing (Free During Beta), Feedback Loop (Weekly Triage) 6) Upload validation working: Non-PDF files rejected with error 'Please upload a PDF floor plan.' 7) Valid PDF (3.pdf) accepted and filename displayed 8) Form filling functional (project name, dropdowns, ceiling height) 9) Backend API SUCCESS: POST /api/takeoff/analyze returned 200 with complete data: summary (total_linear_feet: 140.0, net_wall_sqft: 1400.0, opening_count: 0, ceiling_height_ft: 10.0), walls array (4 walls), model_3d object present. ❌ FAILED (3/12 criteria - CRITICAL BLOCKER): 10) Summary metric cards NOT RENDERED (Total Linear Feet, Net Wall Sqft, Openings, Ceiling Heights all missing) 11) Parsed walls table NOT RENDERED (no table, no heading) 12) 3D Model Layout section NOT RENDERED (no canvas, no heading). ROOT CAUSE: React Three Fiber crash - Error 'R3F: Span is not part of the THREE namespace! Did you forget to extend?' Console shows Emergent visual editor injecting <span> wrappers (x-file-name, x-dynamic attributes) inside Three.js Canvas component. When TakeoffEstimator renders results after API success, the Takeoff3DViewer Canvas crashes because THREE.js cannot render HTML span elements. Canvas crash prevents entire results section (summary cards + table + 3D viewer) from mounting. ENVIRONMENT ISSUE: Development preview tooling interferes with react-three-fiber rendering. Code structure is correct (API returns data, component logic sound), but visual editor spans break Three.js. SECONDARY ISSUES: THREE.Clock deprecation warning, WebGL context lost (consequence of crash), HTML hydration warnings from injected spans."
         - working: true
@@ -392,9 +404,15 @@ test_plan:
     - "Backend Boot After Zip Import"
   test_all: false
   test_priority: "high_first"
-  test_completed: false
+  test_completed: true
 
 agent_communication:
+    - agent: "testing"
+      timestamp: "2026-03-19T04:18:00Z"
+      message: "🎉 AI TAKEOFF BETA - OVERLAY PREVIEW FEATURES TESTING COMPLETE! All 6 comprehensive tests PASSED for latest overlay-ready takeoff changes. VALIDATED FEATURES: ✅ preview_image_url/width/height fields returned correctly ✅ Preview PNG images accessible (229KB) ✅ wall_height parameter fully optional ✅ ceiling_height_ft extracted from analysis ✅ Complete API response structure (summary, walls, model_3d, source_pages_used) ✅ Non-PDF rejection working ✅ No backend runtime errors ✅ External URL accessibility confirmed. The overlay-ready implementation with PDF first-page preview generation is production-ready and fully functional. Stuck_count remains 0 - all takeoff overlay features working correctly."
+    - agent: "main"
+      timestamp: "2026-03-19T18:00:00Z"
+      message: "User requested removing 3D model and replacing with overlay on uploaded plans. Implemented PlanOverlayViewer and backend preview_image generation so walls/openings can be drawn over plan image. Requesting backend validation and then frontend validation on overlay flow." 
     - agent: "testing"
       timestamp: "2026-03-19T17:45:00Z"
       message: "🎉 AI TAKEOFF BETA RETEST COMPLETE - ALL LATEST IMPROVEMENTS VALIDATED! Comprehensive backend testing using /tmp/3.pdf confirms all requested changes working perfectly. VALIDATIONS PASSED: ✅ API 200 and stable ✅ summary.ceiling_height_ft returned from pipeline (10.0 ft extracted) ✅ source_pages_used present (1 page for single-page PDF) ✅ No runtime errors or NameError/undefined vars ✅ Non-PDF rejection returns 400 ✅ Multi-page processing active (up to 3 pages) ✅ Extracted PDF text integration working ✅ Dimension-text inference fallback operational ✅ Optional wall_height parameter handling ✅ Backend stability (2/2 successful requests) ✅ Robust error handling. Response shows detailed analysis: 289 linear feet, 4 walls, 11 openings, proper 3D model coordinates. All improvements for better PDF reading quality, ceiling height extraction from drawings, and enhanced multi-page processing are production-ready. Stuck_count remains 0 - task fully functional."

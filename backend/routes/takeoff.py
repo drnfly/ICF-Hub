@@ -82,6 +82,27 @@ def pdf_pages_to_images_and_text(pdf_path: Path, max_pages: int = 3) -> tuple[Li
     return images_b64, "\n\n".join(text_chunks)
 
 
+def render_pdf_first_page_preview(pdf_path: Path) -> Dict[str, Any]:
+    doc = fitz.open(pdf_path)
+    if doc.page_count == 0:
+        doc.close()
+        raise ValueError("PDF has no pages")
+
+    page = doc.load_page(0)
+    pix = page.get_pixmap(matrix=fitz.Matrix(2.2, 2.2), alpha=False)
+    preview_filename = f"{uuid.uuid4().hex}_preview.png"
+    preview_path = UPLOAD_DIR / preview_filename
+    pix.save(str(preview_path))
+    doc.close()
+
+    return {
+        "preview_filename": preview_filename,
+        "preview_width": pix.width,
+        "preview_height": pix.height
+    }
+
+
+
 def parse_llm_json(raw: str) -> Dict[str, Any]:
     if not raw:
         return {}
@@ -374,10 +395,20 @@ async def analyze_takeoff(
         backend_base_url = get_public_backend_base_url(request)
         file_url = f"{backend_base_url}/uploads/{filename}" if backend_base_url else f"/uploads/{filename}"
 
+        preview_meta = render_pdf_first_page_preview(filepath)
+        preview_image_url = (
+            f"{backend_base_url}/uploads/{preview_meta['preview_filename']}"
+            if backend_base_url
+            else f"/uploads/{preview_meta['preview_filename']}"
+        )
+
         takeoff = await analyze_pdf_takeoff(filepath, preferred_height_ft)
 
         return {
             "file_url": file_url,
+            "preview_image_url": preview_image_url,
+            "preview_width": preview_meta["preview_width"],
+            "preview_height": preview_meta["preview_height"],
             "filename": filename,
             "format": format,
             "wall_height": takeoff.get("summary", {}).get("ceiling_height_ft"),
