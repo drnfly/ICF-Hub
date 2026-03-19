@@ -8,7 +8,7 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
+from typing import Any, List, Optional, Dict
 import uuid
 from datetime import datetime, timezone, timedelta
 import jwt
@@ -705,32 +705,34 @@ async def update_lead_status(lead_id: str, data: LeadStatusUpdate, user=Depends(
 
 # ─── AI Intake & Matching ───
 
-INTAKE_SYSTEM_PROMPT = """You are ICF Hub's Expert AI Architect.
-Your goal is to gather lead info and then provide expert advice on their specific project.
+FIND_CONTRACTOR_SYSTEM_PROMPT = """You are ICF Hub's contractor-match assistant.
+The homeowner has already shared:
+- Project Location
+- Current Project Stage
 
-PHASE 1: CONTACT INFO (Ask these first, STRICTLY only these):
-1. Name
-2. Project Location (City, State)
-3. Contact Info (Email or Phone)
-
-DO NOT ASK FOR BUDGET. DO NOT ASK FOR TIMELINE.
-
-PHASE 2: PROJECT CONTEXT
-4. "Do you have any blueprints, sketches, or plans? If yes, please upload them using the paperclip icon."
-   - If user uploads: Acknowledge it warmly.
-   - If user says NO: "No problem, we can connect you with a designer later."
-
-PHASE 3: EXPERT ASSISTANCE (The Core Value)
-- Ask: "How can I assist you with your project today? I can review your layout, answer technical questions, or help with cost estimates."
-- Answer their specific questions intelligently.
-- Provide high-value, specific advice based on their inputs.
-
-RULES:
-- Be helpful and knowledgeable.
-- Keep the conversation flowing naturally.
-- You have a limit of 5 free expert answers. (The system handles the counting, you just provide the value).
-- If the user asks for a contractor match, respond with "COMPLETE:" followed by a brief confirmation to finalize the chat. Do not ask additional questions after that.
+Your job now:
+- Provide specific, practical answers to homeowner questions about ICF design, planning, budgeting, permits, sequencing, and contractor hiring.
+- Keep answers concise and useful (typically under 180 words).
+- Be transparent when assumptions are needed.
+- Never ask for payment yourself; the platform handles upgrades.
 """
+
+
+def build_intake_session_defaults(session_id: str) -> Dict[str, Any]:
+    return {
+        "session_id": session_id,
+        "location": None,
+        "project_stage": None,
+        "answered_questions": 0,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+
+
+def update_session_timestamp(payload: Dict[str, Any]) -> Dict[str, Any]:
+    payload["updated_at"] = datetime.now(timezone.utc).isoformat()
+    return payload
+
 
 async def generate_intake_summary(session_id: str) -> str:
     history = await db.intake_chats.find({"session_id": session_id}).sort("created_at", 1).to_list(50)
@@ -785,10 +787,120 @@ async def get_admin_payments():
 @api_router.post("/intake/chat")
 async def intake_chat(data: ChatRequest):
     if not EMERGENT_LLM_KEY:
-        raise HTTPException(status_code=503, detail="AI service not configured - TESTING")
-    
-    # DEBUG: bypass AI and return a test response
-    return {"response": "DEBUG: AI service is properly configured!", "session_id": data.session_id, "is_complete": False}
+        raise HTTPException(status_code=503, detail="AI service not configured")
+
+    session_id = data.session_id.strip()
+    user_message = data.message.strip()
+
+    if not session_id or not user_message:
+        raise HTTPException(status_code=400, detail="session_id and message are required")
+
+    # Persist user message
+    await db.intake_chats.insert_one({
+        "id": str(uuid.uuid4()),
+        "session_id": session_id,
+        "role": "user",
+        "content": user_message,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+
+    session_doc = await db.intake_sessions.find_one({"session_id": session_id}, {"_id": 0})
+    if not session_doc:
+        session_doc = build_intake_session_defaults(session_id)
+        await db.intake_sessions.insert_one(session_doc)
+
+    response_text = ""
+    is_complete = False
+    requires_upgrade = False
+
+    # Step 1: collect location
+    if not session_doc.get("location"):
+        session_doc["location"] = user_message
+        response_text = "Great — and what stage is your project in right now? (idea, design, permits, ready to build, etc.)"
+        await db.intake_sessions.update_one(
+            {"session_id": session_id},
+            {"$set": update_session_timestamp({"location": session_doc["location"]})}
+        )
+
+    # Step 2: collect project stage
+    elif not session_doc.get("project_stage"):
+        session_doc["project_stage"] = user_message
+        response_text = (
+            "Perfect. I can now help with your project questions. "
+            "You have 5 free expert answers before upgrade is required. "
+            "What would you like to ask first?"
+        )
+        await db.intake_sessions.update_one(
+            {"session_id": session_id},
+            {"$set": update_session_timestamp({"project_stage": session_doc["project_stage"]})}
+        )
+
+    else:
+        if user_message.startswith("[System: User uploaded file:"):
+            response_text = (
+                "Got your uploaded plan. I’ll use it while answering your next questions. "
+                "What would you like to know about your project?"
+            )
+        else:
+            answered_questions = int(session_doc.get("answered_questions", 0))
+
+            if answered_questions >= 5:
+                response_text = (
+                    "You’ve used your 5 free expert answers. "
+                    "Please upgrade to continue with more detailed guidance and contractor matching."
+                )
+                requires_upgrade = True
+            else:
+                chat_key = f"intake_{session_id}"
+                if chat_key not in chat_instances:
+                    chat_instances[chat_key] = LlmChat(
+                        api_key=EMERGENT_LLM_KEY,
+                        session_id=chat_key,
+                        system_message=FIND_CONTRACTOR_SYSTEM_PROMPT
+                    ).with_model("openai", "gpt-5.2")
+
+                chat = chat_instances[chat_key]
+                contextual_question = (
+                    f"Homeowner location: {session_doc.get('location')}\n"
+                    f"Project stage: {session_doc.get('project_stage')}\n"
+                    f"Question: {user_message}"
+                )
+
+                try:
+                    llm_reply = await chat.send_message(UserMessage(text=contextual_question))
+                    response_text = llm_reply.strip()
+                except Exception as e:
+                    logger.error(f"Intake LLM error: {e}")
+                    response_text = "I can help with that. Please share a bit more detail and I’ll give a practical recommendation."
+
+                answered_questions += 1
+                await db.intake_sessions.update_one(
+                    {"session_id": session_id},
+                    {"$set": update_session_timestamp({"answered_questions": answered_questions})}
+                )
+
+    # Persist assistant message
+    await db.intake_chats.insert_one({
+        "id": str(uuid.uuid4()),
+        "session_id": session_id,
+        "role": "assistant",
+        "content": response_text,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+
+    latest_session = await db.intake_sessions.find_one({"session_id": session_id}, {"_id": 0})
+    answered_questions = int((latest_session or {}).get("answered_questions", 0))
+    remaining = max(5 - answered_questions, 0)
+
+    return {
+        "response": response_text,
+        "session_id": session_id,
+        "is_complete": is_complete,
+        "requires_upgrade": requires_upgrade,
+        "answered_questions": answered_questions,
+        "free_questions_remaining": remaining,
+        "summary": ""
+    }
 
 @api_router.post("/intake/upload")
 async def upload_file(request: Request, session_id: str = Form(...), file: UploadFile = File(...)):
@@ -819,7 +931,6 @@ async def upload_file(request: Request, session_id: str = Form(...), file: Uploa
 
         # Inject file info into active chat instance if exists
         if session_id in chat_instances:
-            chat = chat_instances[session_id]
             # Send context silently or as system prompt update if possible, 
             # but LlmChat is session based. Sending a user message with system info is a workaround.
             # Ideally, we just append to history and let the NEXT user message trigger the response.

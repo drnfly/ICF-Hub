@@ -11,7 +11,7 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function GetQuote() {
   const [messages, setMessages] = useState([
-    { role: "assistant", content: "Hi! I'm your AI Architect. To get started, what is your name and where is your project located?" }
+    { role: "assistant", content: "To find the right contractor, what’s your project location (city/state)?" }
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -140,6 +140,14 @@ export default function GetQuote() {
       const aiResponse = res.data.response;
       setMessages(p => [...p, { role: "assistant", content: aiResponse }]);
       
+      if (typeof res.data.answered_questions === "number") {
+        setMessageCount(res.data.answered_questions);
+      }
+
+      if (res.data.requires_upgrade) {
+        setShowUpgrade(true);
+      }
+      
       if (res.data.is_complete) {
         setComplete(true);
         setSummary(res.data.summary || "");
@@ -188,6 +196,12 @@ export default function GetQuote() {
       });
       
       setMessages(p => [...p, { role: "assistant", content: chatRes.data.response }]);
+      if (typeof chatRes.data.answered_questions === "number") {
+        setMessageCount(chatRes.data.answered_questions);
+      }
+      if (chatRes.data.requires_upgrade) {
+        setShowUpgrade(true);
+      }
 
     } catch (err) {
       console.error(err);
@@ -276,10 +290,10 @@ export default function GetQuote() {
           className="flex-1 bg-card border border-border rounded-lg shadow-sm p-6 mb-4 overflow-y-auto min-h-[500px] flex flex-col gap-4 relative"
           data-testid="intake-chat-container"
         >
-          {!isPremium && messageCount > 3 && (
+          {!isPremium && messageCount > 0 && (
             <div className="sticky top-0 z-10 flex justify-center w-full" data-testid="intake-free-messages-banner">
                <div className="bg-yellow-100 text-yellow-800 text-xs px-3 py-1 rounded-full border border-yellow-200 shadow-sm" data-testid="intake-free-messages-text">
-                 {5 - messageCount} free messages remaining
+                 {Math.max(5 - messageCount, 0)} free questions remaining
                </div>
             </div>
           )}

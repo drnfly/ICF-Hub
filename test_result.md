@@ -214,7 +214,23 @@ backend:
         - working: true
           agent: "testing"
           timestamp: "2026-03-19T04:18:00Z"
-          comment: "✅ OVERLAY PREVIEW FEATURES VALIDATION COMPLETE - ALL 6 TESTS PASSED: Comprehensive testing of latest overlay-ready takeoff changes using /tmp/3.pdf confirms all requested features working perfectly. OVERLAY FEATURES VALIDATED: 1) preview_image_url field returned correctly (PNG upload path) ✅ 2) preview_width (1743px) and preview_height (1347px) fields present and valid ✅ 3) Preview image accessible at generated URL (229KB PNG file) ✅ CORE FUNCTIONALITY CONFIRMED: 4) wall_height parameter fully optional - works with/without (10.0ft vs 12.0ft) ✅ 5) ceiling_height_ft extracted from analysis and returned in summary ✅ 6) Complete response structure: summary (total_linear_feet: 320, net_wall_sqft: 2619, opening_count: 25), walls array (4 walls), model_3d object, source_pages_used (1) ✅ API VALIDATION: 7) Non-PDF rejection returns 400 correctly ✅ 8) No runtime errors in backend logs ✅ 9) Backend stability with external URL accessible ✅ The overlay-ready takeoff implementation with PDF first-page preview generation is fully functional and production-ready. All overlay visualization requirements met."
+
+  - task: "Find Contractor Intake Flow + 5 Free Questions Gate"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          timestamp: "2026-03-19T04:33:00Z"
+          comment: "Replaced debug intake endpoint with real flow: collect location first, then project stage, then answer up to 5 expert questions before triggering upgrade requirement. Added intake session persistence, answered_questions tracking, requires_upgrade flag, and free_questions_remaining response fields."
+        - working: true
+          agent: "testing"
+          timestamp: "2026-03-19T04:35:00Z"
+          comment: "✅ ALL TESTS PASSED - FIND CONTRACTOR INTAKE FLOW FULLY WORKING! Comprehensive testing of updated intake/chat flow completed successfully. VALIDATION RESULTS: 1) First message (location) → Assistant correctly asks for project stage ✅ 2) Second message (project stage) → Assistant confirms and invites questions ✅ 3) Questions 1-5 → All answered normally with correct counts (answered_questions increments 1-5, free_questions_remaining decrements 4-0) ✅ 4) Question 6 → Correctly triggers requires_upgrade=true with upgrade prompt message ✅ 5) Response structure → All required fields present (response, session_id, is_complete, requires_upgrade, answered_questions, free_questions_remaining, summary) ✅ 6) No debug placeholders → Clean production responses ✅ Sequential conversation in single session_id working perfectly. Backend endpoint POST /api/intake/chat functioning as specified. Session persistence, question counting, upgrade gate, and all response fields working correctly."
 
 
   - task: "Deployment Readiness Hardening"
@@ -399,7 +415,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "AI Takeoff Beta - PDF Parsing & Wall Metrics"
+    - "Find Contractor Intake Flow + 5 Free Questions Gate"
   stuck_tasks:
     - "Backend Boot After Zip Import"
   test_all: false
@@ -407,6 +423,9 @@ test_plan:
   test_completed: true
 
 agent_communication:
+    - agent: "testing"
+      timestamp: "2026-03-19T04:35:00Z"
+      message: "🎉 FIND CONTRACTOR INTAKE FLOW TESTING COMPLETE - ALL TESTS PASSED! Comprehensive validation of updated intake/chat flow confirms perfect functionality. FLOW VALIDATION: ✅ Step 1: Location message → Assistant asks for project stage ✅ Step 2: Project stage → Assistant confirms and invites questions ✅ Questions 1-5: All answered normally with correct tracking (answered_questions: 1→5, free_questions_remaining: 4→0) ✅ Question 6: Correctly triggers requires_upgrade=true with proper upgrade message ✅ Response structure: All required fields present (response, session_id, is_complete, requires_upgrade, answered_questions, free_questions_remaining, summary) ✅ No debug placeholders detected - clean production responses. Sequential conversation flow working perfectly in single session. Backend endpoint POST /api/intake/chat fully functional as specified. Session persistence, question counting, upgrade gate, and response structure all working correctly. Task marked working:true, needs_retesting:false, stuck_count remains 0."
     - agent: "testing"
       timestamp: "2026-03-19T04:18:00Z"
       message: "🎉 AI TAKEOFF BETA - OVERLAY PREVIEW FEATURES TESTING COMPLETE! All 6 comprehensive tests PASSED for latest overlay-ready takeoff changes. VALIDATED FEATURES: ✅ preview_image_url/width/height fields returned correctly ✅ Preview PNG images accessible (229KB) ✅ wall_height parameter fully optional ✅ ceiling_height_ft extracted from analysis ✅ Complete API response structure (summary, walls, model_3d, source_pages_used) ✅ Non-PDF rejection working ✅ No backend runtime errors ✅ External URL accessibility confirmed. The overlay-ready implementation with PDF first-page preview generation is production-ready and fully functional. Stuck_count remains 0 - all takeoff overlay features working correctly."
