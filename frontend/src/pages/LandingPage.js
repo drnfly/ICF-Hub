@@ -53,7 +53,7 @@ export default function LandingPage() {
                 <div className="flex flex-wrap gap-4 animate-fade-up" style={{ animationDelay: "0.4s" }}>
                   <Button
                     data-testid="hero-get-quote-btn"
-                    onClick={() => navigate("/contractors")}
+                    onClick={() => navigate("/get-quote")}
                     className="rounded-sm text-xs tracking-widest font-bold uppercase px-6 py-3 hard-shadow"
                     size="lg"
                   >
