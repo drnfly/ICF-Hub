@@ -892,6 +892,49 @@ async def intake_chat(data: ChatRequest):
     answered_questions = int((latest_session or {}).get("answered_questions", 0))
     remaining = max(5 - answered_questions, 0)
 
+    lead_summary = ""
+    lead_id = None
+    if latest_session and latest_session.get("location") and latest_session.get("project_stage"):
+        lead_summary = await generate_intake_summary(session_id)
+
+        location_raw = (latest_session.get("location") or "").strip()
+        city = location_raw
+        state = ""
+        if "," in location_raw:
+            city_part, state_part = location_raw.split(",", 1)
+            city = city_part.strip()
+            state = state_part.strip()
+
+        existing_lead = await db.leads.find_one({"intake_session_id": session_id}, {"_id": 0})
+        lead_id = (existing_lead or {}).get("id") or str(uuid.uuid4())
+
+        lead_payload = {
+            "id": lead_id,
+            "intake_session_id": session_id,
+            "name": "Homeowner Inquiry",
+            "email": "",
+            "phone": "",
+            "city": city,
+            "state": state,
+            "project_type": latest_session.get("project_stage"),
+            "budget_range": "TBD",
+            "timeline": "TBD",
+            "status": "pending_match",
+            "chat_summary": lead_summary,
+            "ai_matches": [],
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+
+        if not existing_lead:
+            lead_payload["created_at"] = datetime.now(timezone.utc).isoformat()
+
+        await db.leads.update_one(
+            {"intake_session_id": session_id},
+            {"$set": lead_payload},
+            upsert=True
+        )
+
+
     return {
         "response": response_text,
         "session_id": session_id,
@@ -899,7 +942,8 @@ async def intake_chat(data: ChatRequest):
         "requires_upgrade": requires_upgrade,
         "answered_questions": answered_questions,
         "free_questions_remaining": remaining,
-        "summary": ""
+        "summary": lead_summary,
+        "lead_id": lead_id
     }
 
 @api_router.post("/intake/upload")

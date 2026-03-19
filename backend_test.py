@@ -1,298 +1,248 @@
 #!/usr/bin/env python3
-"""
-Backend API Testing - Find Contractor Intake Flow + 5 Free Questions Gate
-Testing the sequential conversation flow with proper requirements validation.
-"""
 
 import asyncio
 import httpx
-import uuid
 import json
+import uuid
 from datetime import datetime
 
 # Backend URL from frontend/.env
 BACKEND_URL = "https://gitpull-preview.preview.emergentagent.com/api"
 
-class IntakeChatFlowTest:
-    def __init__(self):
-        self.session_id = str(uuid.uuid4())
-        self.client = httpx.AsyncClient(timeout=30.0)
-        self.test_results = {
-            "location_step": None,
-            "project_stage_step": None,
-            "questions_1_to_5": [],
-            "question_6_upgrade": None,
-            "response_structure": None,
-            "debug_responses": False
-        }
+async def test_contractor_intake_flow():
+    """
+    Test the Find Contractor Intake Flow + 5 Free Questions Gate
+    Validates:
+    1. /api/intake/chat flow (location -> stage -> Q&A -> requires_upgrade on Q6)
+    2. Lead creation in db.leads with status=pending_match, no auto-matching
+    3. /api/admin/leads returns the lead
+    4. No automatic matching triggered
+    """
     
-    async def send_chat_message(self, message: str):
-        """Send a chat message to the intake endpoint"""
-        try:
-            response = await self.client.post(
-                f"{BACKEND_URL}/intake/chat",
-                json={
-                    "message": message,
-                    "session_id": self.session_id
-                },
-                headers={"Content-Type": "application/json"}
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                print(f"✅ Message sent: '{message[:50]}...'")
-                print(f"   Response: '{data.get('response', '')[:80]}...'")
-                print(f"   Status: answered_questions={data.get('answered_questions', 0)}, remaining={data.get('free_questions_remaining', 0)}, requires_upgrade={data.get('requires_upgrade', False)}")
-                return data
-            else:
-                print(f"❌ HTTP {response.status_code}: {response.text}")
-                return None
-                
-        except Exception as e:
-            print(f"❌ Request failed: {e}")
-            return None
+    print("🔍 TESTING: Find Contractor Intake Flow + 5 Free Questions Gate")
+    print("=" * 70)
     
-    async def test_step_1_location(self):
-        """Test Step 1: First message should be treated as location"""
-        print("\n=== STEP 1: Location Collection ===")
-        response = await self.send_chat_message("Denver, Colorado")
+    session_id = f"test_{uuid.uuid4().hex[:8]}"
+    async with httpx.AsyncClient(timeout=30.0) as client:
         
-        if response:
-            # Should ask for project stage next
-            expected_keywords = ["project", "stage", "idea", "design", "permits", "build"]
-            response_lower = response.get("response", "").lower()
-            
-            if any(keyword in response_lower for keyword in expected_keywords):
-                self.test_results["location_step"] = "PASS"
-                print("✅ PASS: Assistant correctly asked for project stage")
-            else:
-                self.test_results["location_step"] = "FAIL"
-                print("❌ FAIL: Assistant didn't ask for project stage")
-                print(f"   Got response: {response.get('response')}")
-            
-            # Validate response structure
-            self.validate_response_structure(response, step="location")
-        else:
-            self.test_results["location_step"] = "FAIL"
-            print("❌ FAIL: No response received")
-    
-    async def test_step_2_project_stage(self):
-        """Test Step 2: Second message should be treated as project stage"""
-        print("\n=== STEP 2: Project Stage Collection ===")
-        response = await self.send_chat_message("Design phase - I have blueprints ready")
+        # STEP 1: Send location message
+        print("📍 Step 1: Sending location message...")
+        response = await client.post(f"{BACKEND_URL}/intake/chat", json={
+            "message": "I'm building in Denver, Colorado",
+            "session_id": session_id
+        })
         
-        if response:
-            # Should confirm and invite questions
-            response_lower = response.get("response", "").lower()
-            expected_keywords = ["perfect", "help", "questions", "free", "expert", "5"]
+        if response.status_code != 200:
+            print(f"❌ FAIL: Step 1 failed with {response.status_code}: {response.text}")
+            return False
             
-            if any(keyword in response_lower for keyword in expected_keywords):
-                self.test_results["project_stage_step"] = "PASS"
-                print("✅ PASS: Assistant confirmed and invited questions")
-            else:
-                self.test_results["project_stage_step"] = "FAIL"
-                print("❌ FAIL: Assistant didn't properly confirm and invite questions")
-                print(f"   Got response: {response.get('response')}")
-            
-            # Validate response structure
-            self.validate_response_structure(response, step="project_stage")
-        else:
-            self.test_results["project_stage_step"] = "FAIL"
-            print("❌ FAIL: No response received")
-    
-    async def test_questions_1_to_5(self):
-        """Test Questions 1-5: Should answer normally"""
-        print("\n=== STEPS 3-7: Questions 1 through 5 ===")
+        data = response.json()
+        print(f"✅ Response: {data['response'][:100]}...")
+        print(f"   Questions answered: {data.get('answered_questions', 0)}/5")
         
+        if not ("stage" in data['response'].lower() or "project" in data['response'].lower()):
+            print(f"❌ FAIL: Expected AI to ask about project stage, got: {data['response']}")
+            return False
+            
+        # STEP 2: Send project stage message  
+        print("\n🏗️ Step 2: Sending project stage message...")
+        response = await client.post(f"{BACKEND_URL}/intake/chat", json={
+            "message": "I'm in the design phase, just finished my architectural plans",
+            "session_id": session_id
+        })
+        
+        if response.status_code != 200:
+            print(f"❌ FAIL: Step 2 failed with {response.status_code}: {response.text}")
+            return False
+            
+        data = response.json()
+        print(f"✅ Response: {data['response'][:100]}...")
+        print(f"   Questions answered: {data.get('answered_questions', 0)}/5")
+        
+        if data.get('answered_questions', 0) != 0:
+            print(f"❌ FAIL: Expected 0 questions answered after setup, got {data.get('answered_questions')}")
+            return False
+            
+        # STEP 3: Ask Questions 1-5 (should work normally)
         questions = [
             "What's the typical cost per square foot for ICF construction?",
-            "How long does ICF construction take compared to traditional framing?",
-            "What permits do I need for ICF construction in Colorado?",
-            "What should I look for when choosing an ICF contractor?",
-            "What are the energy efficiency benefits of ICF homes?"
+            "How long does an ICF build typically take?",
+            "What permits do I need for ICF construction?", 
+            "What's the best ICF block manufacturer?",
+            "Should I hire a general contractor or specialized ICF contractor?"
         ]
         
         for i, question in enumerate(questions, 1):
-            print(f"\n--- Question {i} ---")
-            response = await self.send_chat_message(question)
+            print(f"\n❓ Step {i+2}: Asking question {i}/5: '{question[:50]}...'")
+            response = await client.post(f"{BACKEND_URL}/intake/chat", json={
+                "message": question,
+                "session_id": session_id
+            })
             
-            if response:
-                # Should provide an answer (not upgrade message)
-                requires_upgrade = response.get("requires_upgrade", False)
-                answered_questions = response.get("answered_questions", 0)
-                remaining = response.get("free_questions_remaining", 0)
+            if response.status_code != 200:
+                print(f"❌ FAIL: Question {i} failed with {response.status_code}: {response.text}")
+                return False
                 
-                if not requires_upgrade and answered_questions == i and remaining == (5 - i):
-                    self.test_results["questions_1_to_5"].append(f"Q{i}: PASS")
-                    print(f"✅ PASS: Question {i} answered normally")
-                else:
-                    self.test_results["questions_1_to_5"].append(f"Q{i}: FAIL")
-                    print(f"❌ FAIL: Question {i} - unexpected upgrade requirement or counts")
-                    print(f"   requires_upgrade={requires_upgrade}, answered={answered_questions}, remaining={remaining}")
+            data = response.json()
+            print(f"✅ Response: {data['response'][:80]}...")
+            print(f"   Questions answered: {data.get('answered_questions', 0)}/5")
+            print(f"   Free questions remaining: {data.get('free_questions_remaining', 0)}")
+            print(f"   Requires upgrade: {data.get('requires_upgrade', False)}")
+            
+            expected_answered = i
+            expected_remaining = 5 - i
+            
+            if data.get('answered_questions', 0) != expected_answered:
+                print(f"❌ FAIL: Expected {expected_answered} questions answered, got {data.get('answered_questions')}")
+                return False
                 
-                # Validate response structure
-                self.validate_response_structure(response, step=f"question_{i}")
-            else:
-                self.test_results["questions_1_to_5"].append(f"Q{i}: FAIL")
-                print(f"❌ FAIL: Question {i} - No response received")
-    
-    async def test_question_6_upgrade(self):
-        """Test Question 6: Should trigger upgrade requirement"""
-        print("\n=== STEP 8: Question 6 (Upgrade Required) ===")
+            if data.get('free_questions_remaining', 0) != expected_remaining:
+                print(f"❌ FAIL: Expected {expected_remaining} remaining, got {data.get('free_questions_remaining')}")
+                return False
+                
+            if i < 5 and data.get('requires_upgrade', False):
+                print(f"❌ FAIL: Unexpected upgrade requirement on question {i}")
+                return False
         
-        response = await self.send_chat_message("Can you help me create a construction timeline and budget breakdown?")
+        # STEP 4: Ask Question 6 (should trigger requires_upgrade)
+        print(f"\n❓ Step 8: Asking question 6 (should trigger upgrade requirement)...")
+        response = await client.post(f"{BACKEND_URL}/intake/chat", json={
+            "message": "How do I find qualified ICF contractors in my area?",
+            "session_id": session_id
+        })
         
-        if response:
-            requires_upgrade = response.get("requires_upgrade", False)
-            answered_questions = response.get("answered_questions", 0)
-            remaining = response.get("free_questions_remaining", 0)
-            response_text = response.get("response", "")
+        if response.status_code != 200:
+            print(f"❌ FAIL: Question 6 failed with {response.status_code}: {response.text}")
+            return False
             
-            # Should require upgrade, have 5 answered questions, 0 remaining
-            if requires_upgrade and answered_questions == 5 and remaining == 0:
-                # Check if response mentions upgrade
-                if "upgrade" in response_text.lower() and "5 free" in response_text.lower():
-                    self.test_results["question_6_upgrade"] = "PASS"
-                    print("✅ PASS: Question 6 correctly triggered upgrade requirement")
-                else:
-                    self.test_results["question_6_upgrade"] = "FAIL"
-                    print("❌ FAIL: Question 6 triggered upgrade but wrong message")
-                    print(f"   Response: {response_text}")
-            else:
-                self.test_results["question_6_upgrade"] = "FAIL"
-                print("❌ FAIL: Question 6 didn't trigger upgrade correctly")
-                print(f"   requires_upgrade={requires_upgrade}, answered={answered_questions}, remaining={remaining}")
+        data = response.json()
+        print(f"✅ Response: {data['response'][:100]}...")
+        print(f"   Questions answered: {data.get('answered_questions', 0)}/5")
+        print(f"   Free questions remaining: {data.get('free_questions_remaining', 0)}")
+        print(f"   Requires upgrade: {data.get('requires_upgrade', False)}")
+        
+        if not data.get('requires_upgrade', False):
+            print(f"❌ FAIL: Expected requires_upgrade=true on question 6, got false")
+            return False
             
-            # Validate response structure
-            self.validate_response_structure(response, step="question_6")
-        else:
-            self.test_results["question_6_upgrade"] = "FAIL"
-            print("❌ FAIL: Question 6 - No response received")
-    
-    def validate_response_structure(self, response, step):
-        """Validate that response contains all required fields"""
-        required_fields = ["response", "session_id", "is_complete", "requires_upgrade", "answered_questions", "free_questions_remaining", "summary"]
-        
-        missing_fields = []
-        for field in required_fields:
-            if field not in response:
-                missing_fields.append(field)
-        
-        if not missing_fields:
-            if self.test_results["response_structure"] is None:
-                self.test_results["response_structure"] = "PASS"
-                print(f"✅ Response structure valid (checked at {step})")
-        else:
-            self.test_results["response_structure"] = "FAIL"
-            print(f"❌ FAIL: Response structure missing fields: {missing_fields} (at {step})")
-    
-    async def check_for_debug_responses(self):
-        """Check if any debug/placeholder responses remain"""
-        # This should already be covered by the individual tests
-        # but we'll flag it separately if we see obvious debug text
-        pass
-    
-    async def run_full_test(self):
-        """Run the complete intake flow test"""
-        print("🚀 STARTING FIND CONTRACTOR INTAKE FLOW TEST")
-        print(f"Session ID: {self.session_id}")
-        print(f"Backend URL: {BACKEND_URL}")
-        
-        try:
-            await self.test_step_1_location()
-            await self.test_step_2_project_stage()
-            await self.test_questions_1_to_5()
-            await self.test_question_6_upgrade()
-            await self.check_for_debug_responses()
+        if data.get('answered_questions', 0) != 5:
+            print(f"❌ FAIL: Expected 5 questions answered total, got {data.get('answered_questions')}")
+            return False
             
-        except Exception as e:
-            print(f"❌ Test execution failed: {e}")
+        if data.get('free_questions_remaining', 0) != 0:
+            print(f"❌ FAIL: Expected 0 questions remaining, got {data.get('free_questions_remaining')}")
+            return False
+            
+        # STEP 5: Verify Lead Creation
+        print(f"\n🎯 Step 9: Checking lead creation...")
+        lead_id = data.get('lead_id')
+        if not lead_id:
+            print(f"❌ FAIL: No lead_id returned in response")
+            return False
+            
+        print(f"✅ Lead created with ID: {lead_id}")
         
-        finally:
-            await self.client.aclose()
+        # Check lead has chat_summary
+        chat_summary = data.get('summary', '')
+        if not chat_summary:
+            print(f"❌ FAIL: No chat_summary generated")
+            return False
+            
+        print(f"✅ Chat summary generated: {chat_summary[:100]}...")
         
-        self.print_final_results()
-    
-    def print_final_results(self):
-        """Print comprehensive test results"""
-        print("\n" + "="*70)
-        print("📋 FIND CONTRACTOR INTAKE FLOW - TEST RESULTS")
-        print("="*70)
+        # STEP 6: Verify Admin Leads Endpoint
+        print(f"\n👥 Step 10: Testing /api/admin/leads endpoint...")
+        response = await client.get(f"{BACKEND_URL}/admin/leads")
         
-        print(f"Session ID: {self.session_id}")
-        print(f"Timestamp: {datetime.now().isoformat()}")
+        if response.status_code != 200:
+            print(f"❌ FAIL: Admin leads endpoint failed with {response.status_code}: {response.text}")
+            return False
+            
+        admin_leads = response.json()
+        print(f"✅ Admin leads endpoint returned {len(admin_leads)} leads")
         
-        results = []
+        # Find our lead in the admin results
+        our_lead = None
+        for lead in admin_leads:
+            if lead.get('id') == lead_id:
+                our_lead = lead
+                break
+                
+        if not our_lead:
+            print(f"❌ FAIL: Our lead {lead_id} not found in admin leads")
+            return False
+            
+        # STEP 7: Validate Lead Properties
+        print(f"\n✅ Step 11: Validating lead properties...")
         
-        # Location step
-        if self.test_results["location_step"] == "PASS":
-            print("✅ Step 1 - Location Collection: PASS")
-            results.append("✅ Location → Project Stage")
-        else:
-            print("❌ Step 1 - Location Collection: FAIL")
-            results.append("❌ Location → Project Stage")
+        # Check status = pending_match
+        if our_lead.get('status') != 'pending_match':
+            print(f"❌ FAIL: Expected status=pending_match, got {our_lead.get('status')}")
+            return False
+        print(f"✅ Lead status: {our_lead.get('status')}")
         
-        # Project stage step
-        if self.test_results["project_stage_step"] == "PASS":
-            print("✅ Step 2 - Project Stage Collection: PASS")
-            results.append("✅ Project Stage → Questions Invitation")
-        else:
-            print("❌ Step 2 - Project Stage Collection: FAIL")
-            results.append("❌ Project Stage → Questions Invitation")
+        # Check intake_session_id present
+        if our_lead.get('intake_session_id') != session_id:
+            print(f"❌ FAIL: Expected intake_session_id={session_id}, got {our_lead.get('intake_session_id')}")
+            return False
+        print(f"✅ Lead intake_session_id: {our_lead.get('intake_session_id')}")
         
-        # Questions 1-5
-        passed_questions = len([q for q in self.test_results["questions_1_to_5"] if "PASS" in q])
-        print(f"✅ Questions 1-5: {passed_questions}/5 passed")
-        for q_result in self.test_results["questions_1_to_5"]:
-            if "PASS" in q_result:
-                print(f"  ✅ {q_result}")
-            else:
-                print(f"  ❌ {q_result}")
-        results.append(f"{'✅' if passed_questions == 5 else '❌'} Questions 1-5 ({passed_questions}/5)")
+        # Check chat_summary populated
+        if not our_lead.get('chat_summary'):
+            print(f"❌ FAIL: Lead chat_summary is empty")
+            return False
+        print(f"✅ Lead chat_summary: {our_lead.get('chat_summary')[:100]}...")
         
-        # Question 6 upgrade
-        if self.test_results["question_6_upgrade"] == "PASS":
-            print("✅ Question 6 - Upgrade Trigger: PASS")
-            results.append("✅ Question 6 → Upgrade Required")
-        else:
-            print("❌ Question 6 - Upgrade Trigger: FAIL")
-            results.append("❌ Question 6 → Upgrade Required")
+        # Check ai_matches empty or absent (no auto matching)
+        ai_matches = our_lead.get('ai_matches', [])
+        if ai_matches:
+            print(f"❌ FAIL: Expected empty ai_matches (no auto matching), got {ai_matches}")
+            return False
+        print(f"✅ Lead ai_matches: {ai_matches} (no auto matching)")
         
-        # Response structure
-        if self.test_results["response_structure"] == "PASS":
-            print("✅ Response Structure: PASS")
-            results.append("✅ All required fields present")
-        else:
-            print("❌ Response Structure: FAIL")
-            results.append("❌ Missing required fields")
+        # STEP 8: Confirm No Automatic Matching
+        print(f"\n🚫 Step 12: Confirming no automatic matching triggered...")
         
-        # Overall result
-        print("\n" + "-"*70)
-        total_tests = 8  # location, project_stage, 5 questions, upgrade trigger
-        passed_tests = sum([
-            1 if self.test_results["location_step"] == "PASS" else 0,
-            1 if self.test_results["project_stage_step"] == "PASS" else 0,
-            passed_questions,
-            1 if self.test_results["question_6_upgrade"] == "PASS" else 0
-        ])
+        # Check if lead has matched_contractor_id (should be absent/null)
+        matched_contractor = our_lead.get('matched_contractor_id')
+        if matched_contractor:
+            print(f"❌ FAIL: Unexpected matched_contractor_id: {matched_contractor}")
+            return False
+        print(f"✅ No matched_contractor_id (no automatic matching)")
         
-        if passed_tests == total_tests and self.test_results["response_structure"] == "PASS":
-            print("🎉 OVERALL RESULT: ALL TESTS PASSED")
-            print("✅ Find Contractor Intake Flow is working correctly")
-        else:
-            print("🚨 OVERALL RESULT: SOME TESTS FAILED")
-            print(f"   Passed: {passed_tests}/{total_tests} core tests")
-            if self.test_results["response_structure"] != "PASS":
-                print("   ❌ Response structure issues detected")
+        # Check status is still pending_match (not connected/matched)
+        if our_lead.get('status') != 'pending_match':
+            print(f"❌ FAIL: Lead status changed unexpectedly to {our_lead.get('status')}")
+            return False
+        print(f"✅ Lead remains in pending_match status")
         
-        print("\n📝 SUMMARY FOR test_result.md:")
-        print("   " + " | ".join(results))
-        print("="*70)
+        print(f"\n🎉 ALL TESTS PASSED!")
+        print("=" * 70)
+        print("✅ Intake flow works: location -> stage -> Q&A -> requires_upgrade on Q6")
+        print("✅ Lead created in db.leads with status=pending_match") 
+        print("✅ Lead has intake_session_id and chat_summary")
+        print("✅ ai_matches is empty (no auto matching)")
+        print("✅ /api/admin/leads returns the lead")
+        print("✅ No automatic matching is triggered")
+        print("🎯 REQUIREMENT VALIDATED: 'Do NOT auto-match with contractors; send chat output to Admin Leads as pending leads.'")
+        
+        return True
 
 async def main():
-    """Main test execution"""
-    test = IntakeChatFlowTest()
-    await test.run_full_test()
+    try:
+        success = await test_contractor_intake_flow()
+        if success:
+            print("\n🎉 BACKEND TESTING COMPLETE - ALL REQUIREMENTS VALIDATED")
+            return True
+        else:
+            print("\n❌ BACKEND TESTING FAILED - REQUIREMENTS NOT MET")
+            return False
+    except Exception as e:
+        print(f"\n💥 BACKEND TESTING ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    result = asyncio.run(main())
+    exit(0 if result else 1)

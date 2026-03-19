@@ -228,9 +228,17 @@ backend:
           timestamp: "2026-03-19T04:33:00Z"
           comment: "Replaced debug intake endpoint with real flow: collect location first, then project stage, then answer up to 5 expert questions before triggering upgrade requirement. Added intake session persistence, answered_questions tracking, requires_upgrade flag, and free_questions_remaining response fields."
         - working: true
+          agent: "main"
+          timestamp: "2026-03-19T04:40:00Z"
+          comment: "Updated intake flow to stop automatic contractor matching and instead upsert each qualified intake session into db.leads (status=pending_match) with generated chat_summary so Admin Leads page can review manually."
+        - working: true
           agent: "testing"
           timestamp: "2026-03-19T04:35:00Z"
           comment: "✅ ALL TESTS PASSED - FIND CONTRACTOR INTAKE FLOW FULLY WORKING! Comprehensive testing of updated intake/chat flow completed successfully. VALIDATION RESULTS: 1) First message (location) → Assistant correctly asks for project stage ✅ 2) Second message (project stage) → Assistant confirms and invites questions ✅ 3) Questions 1-5 → All answered normally with correct counts (answered_questions increments 1-5, free_questions_remaining decrements 4-0) ✅ 4) Question 6 → Correctly triggers requires_upgrade=true with upgrade prompt message ✅ 5) Response structure → All required fields present (response, session_id, is_complete, requires_upgrade, answered_questions, free_questions_remaining, summary) ✅ 6) No debug placeholders → Clean production responses ✅ Sequential conversation in single session_id working perfectly. Backend endpoint POST /api/intake/chat functioning as specified. Session persistence, question counting, upgrade gate, and all response fields working correctly."
+        - working: true
+          agent: "testing"
+          timestamp: "2026-03-20T10:30:00Z"
+          comment: "✅ LATEST REQUIREMENT VALIDATED - NO AUTO-MATCHING CONFIRMED! Tested updated requirement 'Do NOT auto-match with contractors; send chat output to Admin Leads as pending leads.' Complete end-to-end validation: 1) /api/intake/chat flow working perfectly (location→stage→Q&A→requires_upgrade on Q6) ✅ 2) After location+stage/questions, lead created in db.leads with status=pending_match ✅ 3) Lead has intake_session_id present and chat_summary populated ✅ 4) ai_matches field is empty array (no auto matching) ✅ 5) /api/admin/leads endpoint returns the lead in admin dashboard feed ✅ 6) No automatic connection/matching triggered (no matched_contractor_id, status stays pending_match) ✅ 7) No ai_matches populated, confirming manual admin review workflow ✅ The new requirement is fully implemented and working correctly. Leads are sent to Admin Leads as pending leads for manual review instead of auto-matching."
 
 
   - task: "Deployment Readiness Hardening"
@@ -414,8 +422,7 @@ metadata:
   test_url: "https://lead-gen-build.preview.emergentagent.com/get-quote"
 
 test_plan:
-  current_focus:
-    - "Find Contractor Intake Flow + 5 Free Questions Gate"
+  current_focus: []
   stuck_tasks:
     - "Backend Boot After Zip Import"
   test_all: false
@@ -423,6 +430,9 @@ test_plan:
   test_completed: true
 
 agent_communication:
+    - agent: "testing"
+      timestamp: "2026-03-20T10:30:00Z"
+      message: "🎯 LATEST REQUIREMENT TESTING COMPLETE - NO AUTO-MATCHING VALIDATED! Tested user requirement: 'Do NOT auto-match with contractors; send chat output to Admin Leads as pending leads.' COMPREHENSIVE VALIDATION: ✅ /api/intake/chat flow working (location→stage→Q&A→requires_upgrade on Q6) ✅ After location+stage+questions, lead created in db.leads with status=pending_match ✅ Lead contains intake_session_id and populated chat_summary ✅ ai_matches field is empty array (no auto-matching) ✅ /api/admin/leads returns the lead for admin dashboard ✅ No automatic connection/matching triggered (no matched_contractor_id) ✅ Lead status stays pending_match for manual admin review. The new anti-auto-matching requirement is fully implemented and working correctly. Leads go to Admin Leads as pending leads instead of auto-matching with contractors. Task remains working:true, needs_retesting:false."
     - agent: "testing"
       timestamp: "2026-03-19T04:35:00Z"
       message: "🎉 FIND CONTRACTOR INTAKE FLOW TESTING COMPLETE - ALL TESTS PASSED! Comprehensive validation of updated intake/chat flow confirms perfect functionality. FLOW VALIDATION: ✅ Step 1: Location message → Assistant asks for project stage ✅ Step 2: Project stage → Assistant confirms and invites questions ✅ Questions 1-5: All answered normally with correct tracking (answered_questions: 1→5, free_questions_remaining: 4→0) ✅ Question 6: Correctly triggers requires_upgrade=true with proper upgrade message ✅ Response structure: All required fields present (response, session_id, is_complete, requires_upgrade, answered_questions, free_questions_remaining, summary) ✅ No debug placeholders detected - clean production responses. Sequential conversation flow working perfectly in single session. Backend endpoint POST /api/intake/chat fully functional as specified. Session persistence, question counting, upgrade gate, and response structure all working correctly. Task marked working:true, needs_retesting:false, stuck_count remains 0."
