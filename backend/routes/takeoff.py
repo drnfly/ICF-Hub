@@ -27,10 +27,12 @@ JWT_ALGORITHM = "HS256"
 
 
 def get_public_backend_base_url(request: Request) -> str:
+    request_base = str(request.base_url).rstrip("/")
+    if request_base:
+        return request_base
+
     configured_url = (os.environ.get("REACT_APP_BACKEND_URL") or "").strip().rstrip("/")
-    if configured_url:
-        return configured_url
-    return str(request.base_url).rstrip("/")
+    return configured_url
 
 
 def load_llm_key() -> str:

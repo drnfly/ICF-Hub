@@ -57,6 +57,24 @@ export default function TakeoffEstimator() {
 
   const summary = useMemo(() => analysis?.summary || null, [analysis]);
   const walls = useMemo(() => analysis?.walls || [], [analysis]);
+  const overlayImageUrl = useMemo(() => {
+    const rawUrl = analysis?.preview_image_url || analysis?.file_url;
+    if (!rawUrl) return "";
+
+    if (/^https?:\/\//i.test(rawUrl)) {
+      try {
+        const parsed = new URL(rawUrl);
+        if (parsed.pathname.startsWith("/uploads/")) {
+          return parsed.pathname;
+        }
+      } catch {
+        return rawUrl;
+      }
+    }
+
+    return rawUrl;
+  }, [analysis]);
+
 
   const handleFileUpload = (event) => {
     const selectedFile = event.target.files?.[0];
@@ -259,7 +277,7 @@ export default function TakeoffEstimator() {
             </div>
 
             <PlanOverlayViewer
-              imageUrl={analysis?.preview_image_url || analysis?.file_url}
+              imageUrl={overlayImageUrl}
               walls={walls}
               summary={summary}
             />
