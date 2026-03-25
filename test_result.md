@@ -273,6 +273,23 @@ backend:
           agent: "testing"
           timestamp: "2026-03-14T09:44:00Z"
           comment: "✅ DEPLOYMENT HARDENING VERIFIED: All deployment readiness checks passed. Test results: 1) Backend startup stable with no runtime crashes ✅ 2) Environment loading with override=False working correctly, EMERGENT_LLM_KEY loaded (len=30) ✅ 3) Health endpoint responsive ✅ 4) Authentication system working (contractor registration/login) ✅ 5) Profile API endpoint working ✅ 6) No hardcoded fallback secrets detected in runtime ✅ 7) HubSpot redirect logic using dynamic origins instead of localhost ✅ Fixed one bug in takeoff route: added missing load_dotenv() call for JWT_SECRET loading. All deployment blockers resolved - system ready for production deployment."
+
+  - task: "ICF Workforce Help Portal APIs"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          timestamp: "2026-03-25T06:02:00Z"
+          comment: "Implemented new ICF Workforce Help Portal MVP: backend worker registration/search/shortlist/invite APIs, job board post/apply APIs, admin approve worker/job APIs, and frontend /help-portal page + navbar links. Requesting backend validation of new portal APIs."
+        - working: true
+          agent: "testing"
+          timestamp: "2026-03-25T06:15:00Z"
+          comment: "✅ ALL ICF WORKFORCE HELP PORTAL APIS WORKING PERFECTLY! Comprehensive testing of all 14 API endpoints completed successfully. WORKER FLOW VALIDATION: ✅ POST /api/workers/register (public) - creates worker with approved=false, status=pending_approval ✅ GET /api/admin/workers - returns all workers for admin review ✅ POST /api/admin/workers/{worker_id}/approve - approves workers with approved=true ✅ GET /api/workers (contractor auth) - returns only approved workers ✅ POST /api/workers/{worker_id}/save - contractor saves workers ✅ GET /api/workers/saved - returns contractor's saved workers ✅ POST /api/workers/{worker_id}/invite - sends invites with project details ✅ GET /api/workers/invites - returns contractor's sent invites. JOB BOARD VALIDATION: ✅ POST /api/jobs (contractor auth) - creates jobs with approved=false, status=pending_approval ✅ GET /api/admin/jobs - returns all jobs for admin approval ✅ POST /api/admin/jobs/{job_id}/approve - approves jobs ✅ GET /api/jobs (public) - returns only approved jobs ✅ POST /api/jobs/{job_id}/apply (public) - submits applications ✅ GET /api/jobs/{job_id}/applications (contractor owner) - returns job applications. All authentication flows working correctly, data validation proper, approval workflows functional. Portal ready for production deployment."
 frontend:
   - task: "Get Quote Page Load and Initial Greeting"
     implemented: true
@@ -491,6 +508,12 @@ agent_communication:
     - agent: "main"
       timestamp: "2026-03-14T09:06:00Z"
       message: "Per user request, TAKEOFF BETA is now open to all users (contractor gate removed), backend takeoff auth made optional, and navbar guest actions include direct TAKEOFF BETA button. Requesting backend+frontend retest with user file /tmp/3.pdf."
+    - agent: "main"
+      timestamp: "2026-03-25T06:02:00Z"
+      message: "Implemented new ICF Workforce Help Portal MVP: backend worker registration/search/shortlist/invite APIs, job board post/apply APIs, admin approve worker/job APIs, and frontend /help-portal page + navbar links. Requesting backend validation of new portal APIs."
+    - agent: "testing"
+      timestamp: "2026-03-25T06:15:00Z"
+      message: "🎉 ICF WORKFORCE HELP PORTAL BACKEND TESTING COMPLETE - ALL 14 APIS WORKING PERFECTLY! Comprehensive end-to-end validation of all portal flows completed successfully. WORKER REGISTRATION & APPROVAL FLOW: ✅ Public worker registration creates profiles with approved=false, status=pending_approval ✅ Admin can list all workers and approve them ✅ Approved workers appear in contractor search results. CONTRACTOR WORKER MANAGEMENT: ✅ Contractors can search approved workers with filters ✅ Save/unsave workers functionality working ✅ Worker invitation system with project details functional ✅ Invite tracking and retrieval working. JOB BOARD FLOW: ✅ Contractors can create jobs (pending approval) ✅ Admin approval workflow for jobs functional ✅ Public can view only approved jobs ✅ Job application system working ✅ Contractors can view applications for their jobs. All authentication, authorization, data validation, and business logic working correctly. Portal APIs are production-ready and fully functional."
     - agent: "main"
       timestamp: "2026-03-14T09:00:00Z"
       message: "User provided specific PDF artifact (3.pdf) to use for frontend testing. Re-invoking frontend testing agent with this exact file for TAKEOFF BETA validation."
