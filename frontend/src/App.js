@@ -21,6 +21,7 @@ import EmailSMSGenerator from "@/pages/EmailSMSGenerator";
 import AdminLeads from "@/pages/AdminLeads";
 import SuperAdmin from "@/pages/SuperAdmin";
 import TakeoffEstimator from "@/pages/TakeoffEstimator";
+import HelpPortal from "@/pages/HelpPortal";
 
 function App() {
   return (
@@ -46,6 +47,7 @@ function App() {
             <Route path="/social" element={<SocialSettings />} />
             <Route path="/admin" element={<SuperAdmin />} />
             <Route path="/tools/takeoff-beta" element={<TakeoffEstimator />} />
+            <Route path="/help-portal" element={<HelpPortal />} />
           </Routes>
         </main>
         <Footer />

@@ -193,6 +193,47 @@ class HubSpotSendRequest(BaseModel):
     subject: Optional[str] = None
     body: str
 
+
+class WorkerRegisterRequest(BaseModel):
+    name: str
+    email: str
+    phone: str
+    city: str
+    state: str
+    years_icf_experience: int = 0
+    pay_rate_min: float
+    pay_rate_max: Optional[float] = None
+    preferred_roles: List[str] = []
+    certifications: str = ""
+    equipment: str = ""
+    availability: str = ""
+    travel_radius_miles: Optional[int] = None
+    notes: str = ""
+
+class WorkerInviteRequest(BaseModel):
+    project_title: str
+    message: str = ""
+    pay_offer: Optional[float] = None
+
+class JobCreateRequest(BaseModel):
+    title: str
+    location: str
+    stage: str
+    pay_rate: str
+    description: str
+    required_experience_years: int = 0
+    skills: List[str] = []
+
+class JobApplyRequest(BaseModel):
+    worker_name: str
+    email: str
+    phone: str
+    experience_years: int = 0
+    notes: str = ""
+
+class ApprovalRequest(BaseModel):
+    approved: bool = True
+
 # ─── Auth Helper ───
 
 def create_token(contractor_id: str, email: str):
@@ -998,6 +1039,264 @@ async def upload_file(request: Request, session_id: str = Form(...), file: Uploa
     except Exception as e:
         logger.error(f"Upload failed: {e}")
         raise HTTPException(500, "Upload failed")
+
+@api_router.post("/workers/register")
+async def register_worker(data: WorkerRegisterRequest):
+    now = datetime.now(timezone.utc).isoformat()
+    normalized_email = data.email.strip().lower()
+
+    existing = await db.worker_profiles.find_one({"email": normalized_email}, {"_id": 0})
+    worker_id = (existing or {}).get("id") or str(uuid.uuid4())
+
+    worker_doc = {
+        "id": worker_id,
+        "name": data.name.strip(),
+        "email": normalized_email,
+        "phone": data.phone.strip(),
+        "city": data.city.strip(),
+        "state": data.state.strip(),
+        "years_icf_experience": max(int(data.years_icf_experience), 0),
+        "pay_rate_min": float(data.pay_rate_min),
+        "pay_rate_max": float(data.pay_rate_max) if data.pay_rate_max is not None else float(data.pay_rate_min),
+        "preferred_roles": data.preferred_roles or [],
+        "certifications": data.certifications.strip(),
+        "equipment": data.equipment.strip(),
+        "availability": data.availability.strip(),
+        "travel_radius_miles": int(data.travel_radius_miles) if data.travel_radius_miles is not None else None,
+        "notes": data.notes.strip(),
+        "approved": False,
+        "status": "pending_approval",
+        "updated_at": now,
+        "created_at": (existing or {}).get("created_at") or now
+    }
+
+    await db.worker_profiles.update_one(
+        {"email": normalized_email},
+        {"$set": worker_doc},
+        upsert=True
+    )
+
+    return worker_doc
+
+@api_router.get("/workers")
+async def list_workers(
+    search: str = "",
+    city: str = "",
+    state: str = "",
+    role: str = "",
+    min_experience: int = 0,
+    max_pay: Optional[float] = None,
+    user=Depends(get_current_contractor)
+):
+    query: Dict[str, Any] = {"approved": True}
+
+    if city.strip():
+        query["city"] = {"$regex": city.strip(), "$options": "i"}
+    if state.strip():
+        query["state"] = {"$regex": state.strip(), "$options": "i"}
+    if min_experience > 0:
+        query["years_icf_experience"] = {"$gte": min_experience}
+    if role.strip():
+        query["preferred_roles"] = {"$elemMatch": {"$regex": role.strip(), "$options": "i"}}
+
+    workers = await db.worker_profiles.find(query, {"_id": 0}).sort("updated_at", -1).to_list(300)
+
+    if search.strip():
+        s = search.strip().lower()
+        workers = [
+            w for w in workers
+            if s in (w.get("name", "").lower())
+            or s in (w.get("city", "").lower())
+            or s in (w.get("state", "").lower())
+            or any(s in (r or "").lower() for r in (w.get("preferred_roles") or []))
+        ]
+
+    if max_pay is not None and max_pay > 0:
+        workers = [w for w in workers if float(w.get("pay_rate_min", 0)) <= max_pay]
+
+    return workers
+
+@api_router.post("/workers/{worker_id}/save")
+async def save_worker(worker_id: str, user=Depends(get_current_contractor)):
+    worker = await db.worker_profiles.find_one({"id": worker_id}, {"_id": 0})
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found")
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.contractor_saved_workers.update_one(
+        {"contractor_id": user["id"], "worker_id": worker_id},
+        {
+            "$set": {"updated_at": now},
+            "$setOnInsert": {
+                "id": str(uuid.uuid4()),
+                "contractor_id": user["id"],
+                "worker_id": worker_id,
+                "created_at": now
+            }
+        },
+        upsert=True
+    )
+
+    return {"success": True}
+
+@api_router.get("/workers/saved")
+async def get_saved_workers(user=Depends(get_current_contractor)):
+    saved = await db.contractor_saved_workers.find(
+        {"contractor_id": user["id"]},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(200)
+
+    worker_ids = [s.get("worker_id") for s in saved if s.get("worker_id")]
+    if not worker_ids:
+        return []
+
+    workers = await db.worker_profiles.find({"id": {"$in": worker_ids}}, {"_id": 0}).to_list(300)
+    worker_map = {w["id"]: w for w in workers}
+    return [worker_map[w_id] for w_id in worker_ids if w_id in worker_map]
+
+@api_router.post("/workers/{worker_id}/invite")
+async def invite_worker(worker_id: str, data: WorkerInviteRequest, user=Depends(get_current_contractor)):
+    worker = await db.worker_profiles.find_one({"id": worker_id}, {"_id": 0})
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found")
+
+    invite_doc = {
+        "id": str(uuid.uuid4()),
+        "worker_id": worker_id,
+        "worker_email": worker.get("email", ""),
+        "contractor_id": user["id"],
+        "project_title": data.project_title.strip(),
+        "message": data.message.strip(),
+        "pay_offer": data.pay_offer,
+        "status": "sent",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.worker_invites.insert_one(invite_doc)
+    return {k: v for k, v in invite_doc.items() if k != "_id"}
+
+@api_router.get("/workers/invites")
+async def list_worker_invites(user=Depends(get_current_contractor)):
+    invites = await db.worker_invites.find(
+        {"contractor_id": user["id"]},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(300)
+    return invites
+
+@api_router.post("/jobs")
+async def create_job(data: JobCreateRequest, user=Depends(get_current_contractor)):
+    now = datetime.now(timezone.utc).isoformat()
+    job_doc = {
+        "id": str(uuid.uuid4()),
+        "contractor_id": user["id"],
+        "title": data.title.strip(),
+        "location": data.location.strip(),
+        "stage": data.stage.strip(),
+        "pay_rate": data.pay_rate.strip(),
+        "description": data.description.strip(),
+        "required_experience_years": max(int(data.required_experience_years), 0),
+        "skills": data.skills or [],
+        "approved": False,
+        "status": "pending_approval",
+        "created_at": now,
+        "updated_at": now
+    }
+    await db.help_jobs.insert_one(job_doc)
+    return {k: v for k, v in job_doc.items() if k != "_id"}
+
+@api_router.get("/jobs")
+async def list_jobs(location: str = "", stage: str = "", search: str = ""):
+    query: Dict[str, Any] = {"approved": True}
+    if location.strip():
+        query["location"] = {"$regex": location.strip(), "$options": "i"}
+    if stage.strip():
+        query["stage"] = {"$regex": stage.strip(), "$options": "i"}
+
+    jobs = await db.help_jobs.find(query, {"_id": 0}).sort("created_at", -1).to_list(300)
+
+    if search.strip():
+        s = search.strip().lower()
+        jobs = [
+            j for j in jobs
+            if s in j.get("title", "").lower() or s in j.get("description", "").lower()
+        ]
+
+    return jobs
+
+@api_router.post("/jobs/{job_id}/apply")
+async def apply_to_job(job_id: str, data: JobApplyRequest):
+    job = await db.help_jobs.find_one({"id": job_id, "approved": True}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    application_doc = {
+        "id": str(uuid.uuid4()),
+        "job_id": job_id,
+        "contractor_id": job.get("contractor_id"),
+        "worker_name": data.worker_name.strip(),
+        "email": data.email.strip().lower(),
+        "phone": data.phone.strip(),
+        "experience_years": max(int(data.experience_years), 0),
+        "notes": data.notes.strip(),
+        "status": "applied",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.job_applications.insert_one(application_doc)
+    return {"success": True, "application_id": application_doc["id"]}
+
+@api_router.get("/jobs/{job_id}/applications")
+async def list_job_applications(job_id: str, user=Depends(get_current_contractor)):
+    job = await db.help_jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job or job.get("contractor_id") != user["id"]:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    applications = await db.job_applications.find({"job_id": job_id}, {"_id": 0}).sort("created_at", -1).to_list(300)
+    return applications
+
+@api_router.get("/admin/workers")
+async def get_admin_workers():
+    workers = await db.worker_profiles.find({}, {"_id": 0}).sort("created_at", -1).to_list(300)
+    return workers
+
+@api_router.post("/admin/workers/{worker_id}/approve")
+async def approve_worker(worker_id: str, data: ApprovalRequest):
+    worker = await db.worker_profiles.find_one({"id": worker_id}, {"_id": 0})
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found")
+
+    await db.worker_profiles.update_one(
+        {"id": worker_id},
+        {
+            "$set": {
+                "approved": data.approved,
+                "status": "approved" if data.approved else "pending_approval",
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    return {"success": True}
+
+@api_router.get("/admin/jobs")
+async def get_admin_jobs():
+    jobs = await db.help_jobs.find({}, {"_id": 0}).sort("created_at", -1).to_list(300)
+    return jobs
+
+@api_router.post("/admin/jobs/{job_id}/approve")
+async def approve_job(job_id: str, data: ApprovalRequest):
+    job = await db.help_jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    await db.help_jobs.update_one(
+        {"id": job_id},
+        {
+            "$set": {
+                "approved": data.approved,
+                "status": "approved" if data.approved else "pending_approval",
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    return {"success": True}
 
 @api_router.get("/admin/leads")
 async def get_admin_leads():
