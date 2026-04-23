@@ -8,7 +8,7 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: "assistant", content: "Hi! I'm your ICF construction advisor. Ask me anything about Insulated Concrete Forms - costs, benefits, timelines, or whether ICF is right for your project." }
+    { role: "assistant", content: "I'm your ICF Expert. You came here for answers—let's get straight to it. Ask me anything about ICF construction: design, engineering, codes, troubleshooting, costs, performance. No fluff. Direct answers." }
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
