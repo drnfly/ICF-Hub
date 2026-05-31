@@ -764,6 +764,175 @@ async def equipment_history(equipment_id: str, user: dict = Depends(get_current_
     } for i in items]
 
 
+@api.get("/equipment/{equipment_id}/availability")
+async def equipment_availability(
+    equipment_id: str,
+    start: str,
+    end: str,
+    qty: Optional[int] = None,
+    user: dict = Depends(get_current_user),
+):
+    """Per-day capacity check for a single SKU."""
+    try:
+        start_d = datetime.fromisoformat(start).date()
+        end_d = datetime.fromisoformat(end).date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Dates must be ISO YYYY-MM-DD")
+    if end_d < start_d:
+        raise HTTPException(status_code=400, detail="end must be on or after start")
+    if (end_d - start_d).days > 366:
+        raise HTTPException(status_code=400, detail="Range too large (max 366 days)")
+    return await _check_sku_availability(equipment_id, start_d, end_d, qty)
+
+
+async def _check_sku_availability(equipment_id: str, start_d, end_d, qty: Optional[int]):
+    eq = await db.equipment.find_one({"_id": ObjectId(equipment_id)})
+    if not eq:
+        raise HTTPException(status_code=404, detail=f"Equipment not found: {equipment_id}")
+    total_qty = eq.get("quantity", 0)
+
+    rentals = await db.rentals.find({
+        "equipment_id": equipment_id,
+        "status": {"$ne": "returned"},
+    }).to_list(2000)
+    bookings = await db.bookings.find({
+        "equipment_id": equipment_id,
+        "status": "tentative",
+    }).to_list(2000)
+
+    days = []
+    min_available = total_qty
+    worst_day = None
+    blocked_dates = []
+    conflicting_rentals = set()
+    conflicting_bookings = set()
+
+    cur = start_d
+    while cur <= end_d:
+        iso = cur.isoformat()
+        on_rent = 0
+        on_hold = 0
+        for r in rentals:
+            occ_start = r.get("start_date", "")
+            occ_end = r.get("return_date") or r.get("due_date", "")
+            if occ_start <= iso <= occ_end:
+                on_rent += r.get("quantity", 0)
+                conflicting_rentals.add(str(r["_id"]))
+        for b in bookings:
+            occ_start = b.get("tentative_start_date", "")
+            occ_end = b.get("tentative_end_date", "")
+            if occ_start <= iso <= occ_end:
+                on_hold += b.get("quantity", 0)
+                conflicting_bookings.add(str(b["_id"]))
+        available = total_qty - on_rent - on_hold
+        sufficient = (qty is None) or (available >= qty)
+        days.append({
+            "date": iso,
+            "weekday": cur.strftime("%a"),
+            "on_rent": on_rent,
+            "on_hold": on_hold,
+            "available": available,
+            "sufficient": sufficient,
+        })
+        if available < min_available:
+            min_available = available
+            worst_day = iso
+        if not sufficient:
+            blocked_dates.append(iso)
+        cur += timedelta(days=1)
+
+    conflict_rental_docs = []
+    if conflicting_rentals:
+        ids = [ObjectId(x) for x in conflicting_rentals]
+        rs = await db.rentals.find({"_id": {"$in": ids}}).to_list(1000)
+        cust_ids = {ObjectId(r["customer_id"]) for r in rs}
+        cust_map = {str(c["_id"]): c for c in await db.customers.find({"_id": {"$in": list(cust_ids)}}).to_list(1000)}
+        for r in rs:
+            conflict_rental_docs.append({
+                "id": str(r["_id"]),
+                "customer_name": cust_map.get(r["customer_id"], {}).get("name", "Unknown"),
+                "quantity": r.get("quantity", 0),
+                "start_date": r.get("start_date"),
+                "due_date": r.get("due_date"),
+                "status": r.get("status"),
+            })
+    conflict_booking_docs = []
+    if conflicting_bookings:
+        ids = [ObjectId(x) for x in conflicting_bookings]
+        bs = await db.bookings.find({"_id": {"$in": ids}}).to_list(1000)
+        for b in bs:
+            conflict_booking_docs.append({
+                "id": str(b["_id"]),
+                "customer_name": b.get("customer_name", ""),
+                "quantity": b.get("quantity", 0),
+                "start_date": b.get("tentative_start_date"),
+                "end_date": b.get("tentative_end_date"),
+                "probability": b.get("probability", "warm"),
+            })
+
+    return {
+        "equipment_id": equipment_id,
+        "equipment_name": eq.get("name"),
+        "total_quantity": total_qty,
+        "qty_requested": qty,
+        "start": start_d.isoformat(),
+        "end": end_d.isoformat(),
+        "overall_ok": all(d["sufficient"] for d in days),
+        "min_available": min_available,
+        "worst_day": worst_day,
+        "blocked_dates": blocked_dates,
+        "days": days,
+        "conflicting_rentals": conflict_rental_docs,
+        "conflicting_bookings": conflict_booking_docs,
+    }
+
+
+class CapacityItem(BaseModel):
+    equipment_id: str
+    qty: int = Field(ge=1)
+
+
+class CapacityCheckIn(BaseModel):
+    start: str
+    end: str
+    items: List[CapacityItem] = Field(min_length=1, max_length=20)
+
+
+@api.post("/capacity/check")
+async def capacity_check_multi(payload: CapacityCheckIn, user: dict = Depends(get_current_user)):
+    """Per-day capacity check across multiple SKUs at once."""
+    try:
+        start_d = datetime.fromisoformat(payload.start).date()
+        end_d = datetime.fromisoformat(payload.end).date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Dates must be ISO YYYY-MM-DD")
+    if end_d < start_d:
+        raise HTTPException(status_code=400, detail="end must be on or after start")
+    if (end_d - start_d).days > 366:
+        raise HTTPException(status_code=400, detail="Range too large (max 366 days)")
+    if len({i.equipment_id for i in payload.items}) != len(payload.items):
+        raise HTTPException(status_code=400, detail="Duplicate equipment_id in items — merge them")
+
+    results = []
+    for item in payload.items:
+        res = await _check_sku_availability(item.equipment_id, start_d, end_d, item.qty)
+        results.append(res)
+
+    overall_ok = all(r["overall_ok"] for r in results)
+    blocked_skus = [r["equipment_name"] for r in results if not r["overall_ok"]]
+    total_blocked_days = len({d for r in results for d in r["blocked_dates"]})
+
+    return {
+        "start": payload.start,
+        "end": payload.end,
+        "overall_ok": overall_ok,
+        "blocked_skus": blocked_skus,
+        "total_blocked_days": total_blocked_days,
+        "items_count": len(results),
+        "results": results,
+    }
+
+
 @api.patch("/equipment/{equipment_id}")
 async def update_equipment(equipment_id: str, payload: EquipmentIn, user: dict = Depends(get_current_user)):
     doc = await db.equipment.find_one({"_id": ObjectId(equipment_id)})
