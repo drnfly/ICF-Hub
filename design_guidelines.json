@@ -1,0 +1,142 @@
+{
+  "project_info": {
+    "name": "ICF Operations Hub",
+    "description": "Unified web app for ICF contractors handling bracing calculations, equipment rental, estimating, and inventory management.",
+    "theme": "Light",
+    "archetype": "4 (Swiss & High-Contrast)",
+    "tone": "Rugged, professional, precise, no-nonsense, high legibility."
+  },
+  "typography": {
+    "font_families": {
+      "headings": "Chivo, sans-serif",
+      "body": "IBM Plex Sans, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "font_sizes": {
+      "h1": "text-4xl sm:text-5xl",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl",
+      "h3": "text-xl sm:text-2xl",
+      "h4": "text-lg sm:text-xl",
+      "body": "text-base",
+      "body_mobile": "text-sm",
+      "small_label": "text-xs tracking-[0.2em] uppercase"
+    },
+    "guidelines": [
+      "Use tight letter spacing (tracking-tight) for headings larger than 32px.",
+      "Use leading-none for headers and leading-relaxed for body.",
+      "Never use 'Inter' or generic sans for headings."
+    ]
+  },
+  "colors": {
+    "background": {
+      "primary": "#FFFFFF",
+      "secondary": "#F4F4F5",
+      "tertiary": "#E4E4E7"
+    },
+    "text": {
+      "primary": "#09090B",
+      "secondary": "#52525B",
+      "inverse": "#FFFFFF",
+      "accent": "#EA580C"
+    },
+    "accent": {
+      "primary": "#EA580C",
+      "primary_hover": "#C2410C",
+      "danger": "#DC2626",
+      "success": "#16A34A",
+      "warning": "#EAB308",
+      "info": "#2563EB"
+    },
+    "border": {
+      "default": "#E4E4E7",
+      "focus": "#EA580C"
+    },
+    "guidelines": [
+      "Maintain minimum 4.5:1 contrast ratio for normal text.",
+      "Use Safety Orange (#EA580C) sparingly for primary CTAs and active states.",
+      "Avoid completely transparent backgrounds for headers or overlays."
+    ]
+  },
+  "spacing_and_layout": {
+    "container_padding": "p-6 sm:p-8",
+    "section_gap": "gap-8 sm:gap-12",
+    "grid": {
+      "dashboard_strategy": "Control Room Grid (Dense, Data Correlation)",
+      "desktop": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4",
+      "gap": "gap-4 sm:gap-6"
+    },
+    "guidelines": [
+      "Mobile-first: always start with grid-cols-1.",
+      "Containers with borders MUST have internal padding (p-6) to prevent text collision.",
+      "Images must not exceed 80vh on mobile."
+    ]
+  },
+  "surface_strategy": {
+    "cards": "Flat background, 1px subtle border (border-zinc-200), no shadow.",
+    "hover_state": "Slight lift (-translate-y-1), subtle shadow (shadow-sm), border darkens.",
+    "headers": "Solid background with a hard bottom border (border-zinc-200). No glassmorphism as it reduces legibility in sunlight.",
+    "borders": "Expose the skeleton. Use border-collapse style layout for data grids.",
+    "radius": "Subtle roundness. Max 4px or 8px border-radius (rounded-sm or rounded-md). Avoid heavily rounded corners."
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-orange-600 text-white hover:bg-orange-700 rounded-sm font-semibold tracking-wide",
+      "secondary": "bg-white text-zinc-900 border border-zinc-200 hover:bg-zinc-50 rounded-sm font-medium",
+      "ghost": "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-sm"
+    },
+    "inputs": "Shadcn inputs customized with sharp corners, zinc-200 borders, focus:ring-orange-600.",
+    "tables": "Dense, highly legible tables with sticky headers. alternating row colors (zinc-50/white) for easy scanning.",
+    "charts": "Shadcn chart components (Recharts) with high-contrast color palettes.",
+    "libraries": [
+      "Shadcn UI",
+      "Recharts (Data Visualization)",
+      "@phosphor-icons/react (Icons)"
+    ],
+    "installation_commands": [
+      "yarn add @phosphor-icons/react recharts clsx tailwind-merge"
+    ]
+  },
+  "motion_and_interactions": {
+    "hover": "Explicitly set text color on hover (e.g., hover:bg-zinc-900 hover:text-white).",
+    "focus": "Focus states must have higher contrast (focus:ring-2 focus:ring-orange-600 focus:outline-none).",
+    "transitions": "Use specific properties (transition-transform duration-200, transition-colors duration-200)."
+  },
+  "accessibility": {
+    "contrast": "Meet APCA/WCAG AA standards.",
+    "testing": "All interactive and key informational elements MUST include a data-testid attribute (e.g., data-testid='bracing-calc-submit').",
+    "motion": "Respect prefers-reduced-motion."
+  },
+  "media_and_images": {
+    "strategy": "Use authentic construction photography. Avoid generic 3D renders. Focus on real workers, concrete, and tools.",
+    "image_urls": {
+      "foreman_avatar_1": {
+        "url": "https://images.unsplash.com/photo-1626885930974-4b69aa21bbf9?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzZ8MHwxfHNlYXJjaHwxfHxjb25zdHJ1Y3Rpb24lMjBmb3JlbWFuJTIwam9ic2l0ZXxlbnwwfHx8fDE3ODAyMDE4Mzl8MA&ixlib=rb-4.1.0&q=85",
+        "description": "two construction workers in safety vests at site",
+        "category": "avatars/team"
+      },
+      "foreman_avatar_2": {
+        "url": "https://images.pexels.com/photos/28196526/pexels-photo-28196526.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Portrait of a construction worker in safety gear",
+        "category": "avatars/team"
+      },
+      "concrete_site_bg": {
+        "url": "https://images.pexels.com/photos/7108784/pexels-photo-7108784.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Low-angle view of an incomplete concrete building structure",
+        "category": "hero/background"
+      },
+      "equipment_tools": {
+        "url": "https://images.pexels.com/photos/4312846/pexels-photo-4312846.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "A collection of construction tools and safety gloves",
+        "category": "content/equipment"
+      }
+    }
+  },
+  "instructions_to_main_agent": [
+    "Ensure all dashboard views are fully responsive, with mobile layouts tested for legibility in bright sunlight (high contrast).",
+    "Use Phosphor icons for dense dashboard navigation and actions.",
+    "The Bracing Engine must be the focal point, utilizing structured forms with clear validation and large, readable output metrics.",
+    "Avoid glassmorphism or soft shadows. Use solid backgrounds with 1px borders.",
+    "Add 'data-testid' to all buttons, inputs, links, and key outputs.",
+    "Do NOT use placeholder image URLs. Rely entirely on the provided image_urls."
+  ]
+}
