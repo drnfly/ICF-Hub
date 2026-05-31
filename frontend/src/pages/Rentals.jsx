@@ -6,8 +6,9 @@ import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
+import { Switch } from "../components/ui/switch";
 import { toast } from "sonner";
-import { Plus, Receipt, ArrowUUpLeft, Trash } from "@phosphor-icons/react";
+import { Plus, Receipt, ArrowUUpLeft, Trash, CalendarPlus } from "@phosphor-icons/react";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const plusDays = (d) => {
@@ -116,6 +117,7 @@ export default function Rentals() {
         damage_fee: Number(retForm.damage_fee),
         notes: retForm.notes,
         items,
+        new_due_date: retForm.extend_due ? retForm.new_due_date : null,
       });
       toast.success("Return processed");
       setRetOpen(false);
@@ -145,6 +147,8 @@ export default function Rentals() {
       condition_on_return: "good",
       damage_fee: 0,
       notes: "",
+      extend_due: false,
+      new_due_date: r.due_date,
       items: (r.items || []).map((it) => ({
         equipment_id: it.equipment_id,
         equipment_name: it.equipment_name,
@@ -393,6 +397,47 @@ export default function Rentals() {
                   Set qty to <span className="font-mono">0</span> (or click <span className="font-mono">keep</span>) to leave that SKU out on the job. The rental stays open as <span className="font-display font-semibold uppercase tracking-wider text-orange-700">partial</span> until everything comes back.
                 </div>
               </div>
+
+              {/* Extend due date when items are being kept */}
+              {(() => {
+                const willBePartial = retForm.items.some((i) => Number(i.quantity) < i.outstanding);
+                if (!willBePartial) return null;
+                return (
+                  <div className="border border-zinc-200 p-3 rounded-sm bg-orange-50/40" data-testid="extend-due-block">
+                    <div className="flex items-center justify-between">
+                      <Label className="label-eyebrow flex items-center gap-2 cursor-pointer" htmlFor="extend_due">
+                        <CalendarPlus size={14} className="text-orange-600" weight="bold" />
+                        Extend due date for remaining items
+                      </Label>
+                      <Switch
+                        id="extend_due"
+                        checked={retForm.extend_due}
+                        onCheckedChange={(v) => setRetForm({ ...retForm, extend_due: v })}
+                        data-testid="ret-extend-toggle"
+                      />
+                    </div>
+                    {retForm.extend_due && (
+                      <div className="mt-2 grid grid-cols-[1fr_auto] gap-2 items-end">
+                        <div>
+                          <Label className="label-eyebrow">New due date</Label>
+                          <Input
+                            type="date"
+                            min={retForm.return_date}
+                            required={retForm.extend_due}
+                            value={retForm.new_due_date}
+                            onChange={(e) => setRetForm({ ...retForm, new_due_date: e.target.value })}
+                            className="rounded-sm mt-1"
+                            data-testid="ret-new-due"
+                          />
+                        </div>
+                        <div className="text-[11px] text-zinc-500 pb-2">
+                          was <span className="font-mono">{returnTarget.due_date}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

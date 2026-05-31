@@ -210,6 +210,7 @@ class RentalReturnIn(BaseModel):
     damage_fee: float = Field(ge=0, default=0)
     notes: Optional[str] = None
     items: Optional[List[ReturnItemIn]] = None  # None = full return of every outstanding item
+    new_due_date: Optional[str] = None  # extend remaining items' due_date
 
 
 # Maintenance
@@ -1269,6 +1270,15 @@ async def return_rental(rental_id: str, payload: RentalReturnIn, user: dict = De
     if all_done:
         update["return_date"] = payload.return_date
         update["condition_on_return"] = payload.condition_on_return
+
+    # Optional: extend the due date for whatever is still out
+    if payload.new_due_date and not all_done:
+        if payload.new_due_date < payload.return_date:
+            raise HTTPException(status_code=400, detail="new_due_date must be on or after return_date")
+        old_due = rental.get("due_date", "")
+        update["due_date"] = payload.new_due_date
+        return_event["due_date_extended_from"] = old_due
+        return_event["due_date_extended_to"] = payload.new_due_date
 
     await db.rentals.update_one(
         {"_id": rental["_id"]},
