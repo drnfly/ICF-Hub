@@ -527,6 +527,40 @@ async def update_equipment(equipment_id: str, payload: EquipmentIn, user: dict =
     return serialize_equipment(doc)
 
 
+class StockAdjustIn(BaseModel):
+    delta: int  # positive to add stock, negative to remove
+    reason: Optional[str] = None
+
+
+@api.post("/equipment/{equipment_id}/adjust")
+async def adjust_stock(equipment_id: str, payload: StockAdjustIn, user: dict = Depends(get_current_user)):
+    doc = await db.equipment.find_one({"_id": ObjectId(equipment_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Equipment not found")
+    new_qty = doc.get("quantity", 1) + payload.delta
+    new_avail = doc.get("available", doc.get("quantity", 1)) + payload.delta
+    if new_qty < 0:
+        raise HTTPException(status_code=400, detail="Quantity cannot go below zero")
+    if new_avail < 0:
+        raise HTTPException(status_code=400, detail=f"Cannot remove {-payload.delta} — only {doc.get('available', 0)} not on rent")
+    await db.equipment.update_one(
+        {"_id": ObjectId(equipment_id)},
+        {"$set": {"quantity": new_qty, "available": new_avail}},
+    )
+    # log the adjustment for audit
+    await db.stock_adjustments.insert_one({
+        "equipment_id": equipment_id,
+        "delta": payload.delta,
+        "reason": payload.reason,
+        "user_id": str(user["_id"]),
+        "user_email": user["email"],
+        "created_at": now_utc(),
+    })
+    doc["quantity"] = new_qty
+    doc["available"] = new_avail
+    return serialize_equipment(doc)
+
+
 @api.delete("/equipment/{equipment_id}")
 async def delete_equipment(equipment_id: str, user: dict = Depends(require_role("admin", "foreman"))):
     await db.equipment.delete_one({"_id": ObjectId(equipment_id)})
