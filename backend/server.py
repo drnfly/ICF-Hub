@@ -5,6 +5,8 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 import os
+import io
+import csv
 import logging
 import math
 import secrets
@@ -14,7 +16,7 @@ from typing import Optional, List, Literal
 import bcrypt
 import jwt
 from bson import ObjectId
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request, Response, UploadFile, File, status
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
@@ -509,7 +511,129 @@ async def create_equipment(payload: EquipmentIn, user: dict = Depends(get_curren
     doc["created_at"] = now_utc()
     res = await db.equipment.insert_one(doc)
     doc["_id"] = res.inserted_id
+    # log initial stock event
+    await db.stock_adjustments.insert_one({
+        "equipment_id": str(res.inserted_id),
+        "delta": doc["quantity"],
+        "reason": "Initial stock — added to inventory",
+        "user_id": str(user["_id"]),
+        "user_email": user["email"],
+        "created_at": now_utc(),
+    })
     return serialize_equipment(doc)
+
+
+CSV_HEADERS = ["name", "category", "condition", "location", "daily_rate", "quantity", "serial", "notes"]
+VALID_CATEGORIES = {"brace", "waler", "strongback", "alignment", "scaffold", "tool", "other"}
+VALID_CONDITIONS = {"excellent", "good", "fair", "poor", "retired"}
+
+
+@api.get("/equipment/template.csv")
+async def csv_template(user: dict = Depends(get_current_user)):
+    """Download a CSV template the user can fill out."""
+    from fastapi.responses import PlainTextResponse
+    sample_rows = [
+        CSV_HEADERS,
+        ["Wafer Brace - 9ft", "brace", "good", "Yard A", "4.50", "200", "WB-9-001", "Aluminum turnbuckle"],
+        ["Strongback Brace - 12ft", "strongback", "good", "Yard A", "7.25", "80", "", "Engineered"],
+        ["Waler 8ft Aluminum", "waler", "excellent", "Yard B", "3.00", "150", "", ""],
+    ]
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    for row in sample_rows:
+        writer.writerow(row)
+    return PlainTextResponse(
+        buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="icf-inventory-template.csv"'},
+    )
+
+
+@api.post("/equipment/import")
+async def import_equipment_csv(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    """
+    Import equipment from CSV. Expected columns (case-insensitive):
+    name, category, condition, location, daily_rate, quantity, serial, notes
+    """
+    fname = (file.filename or "").lower()
+    if not fname.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="File must be a .csv")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="File is empty")
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = content.decode("latin-1")
+
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        raise HTTPException(status_code=400, detail="No header row found")
+
+    created = []
+    errors = []
+    row_index = 1  # header is row 1
+    for raw_row in reader:
+        row_index += 1
+        try:
+            norm = {(k or "").strip().lower(): (v.strip() if isinstance(v, str) else v)
+                    for k, v in raw_row.items() if k}
+            name = norm.get("name") or ""
+            if not name:
+                raise ValueError("missing 'name'")
+            qty_raw = norm.get("quantity") or norm.get("qty") or "1"
+            rate_raw = norm.get("daily_rate") or norm.get("rate") or "0"
+            data = {
+                "name": name,
+                "category": (norm.get("category") or "other").lower(),
+                "condition": (norm.get("condition") or "good").lower(),
+                "location": norm.get("location") or None,
+                "daily_rate": float(rate_raw or 0),
+                "quantity": int(float(qty_raw or 1)),
+                "serial": norm.get("serial") or None,
+                "notes": norm.get("notes") or None,
+            }
+            if data["category"] not in VALID_CATEGORIES:
+                data["category"] = "other"
+            if data["condition"] not in VALID_CONDITIONS:
+                data["condition"] = "good"
+            if data["quantity"] < 0:
+                raise ValueError("quantity must be >= 0")
+            data["available"] = data["quantity"]
+            data["created_at"] = now_utc()
+            res = await db.equipment.insert_one(data)
+            data["_id"] = res.inserted_id
+            await db.stock_adjustments.insert_one({
+                "equipment_id": str(res.inserted_id),
+                "delta": data["quantity"],
+                "reason": f"CSV import — row {row_index}",
+                "user_id": str(user["_id"]),
+                "user_email": user["email"],
+                "created_at": now_utc(),
+            })
+            created.append(serialize_equipment(data))
+        except Exception as e:
+            errors.append({"row": row_index, "error": str(e), "name": raw_row.get("name") or raw_row.get("Name", "")})
+
+    return {
+        "created_count": len(created),
+        "error_count": len(errors),
+        "errors": errors[:50],  # cap to avoid huge payloads
+        "created": created,
+    }
+
+
+@api.get("/equipment/{equipment_id}/history")
+async def equipment_history(equipment_id: str, user: dict = Depends(get_current_user)):
+    items = await db.stock_adjustments.find({"equipment_id": equipment_id}).sort("created_at", -1).to_list(500)
+    return [{
+        "id": str(i["_id"]),
+        "delta": i["delta"],
+        "reason": i.get("reason"),
+        "user_email": i.get("user_email"),
+        "created_at": i["created_at"].isoformat() if isinstance(i["created_at"], datetime) else i["created_at"],
+    } for i in items]
 
 
 @api.patch("/equipment/{equipment_id}")

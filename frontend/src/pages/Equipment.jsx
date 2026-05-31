@@ -6,7 +6,8 @@ import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Minus, Package, PencilSimple, Trash, ArrowsClockwise } from "@phosphor-icons/react";
+import { Plus, Minus, Package, PencilSimple, Trash, ArrowsClockwise, Upload, ClockCounterClockwise, DownloadSimple, FileCsv } from "@phosphor-icons/react";
+import { API_BASE } from "../lib/api";
 
 const CATS = ["brace", "waler", "strongback", "alignment", "scaffold", "tool", "other"];
 const CONDS = ["excellent", "good", "fair", "poor", "retired"];
@@ -130,6 +131,74 @@ export default function Equipment() {
     }
   }
 
+  // ─── CSV import ──────────────────────────────────────────────────────────
+  const [importOpen, setImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importResult, setImportResult] = useState(null);
+  const [importing, setImporting] = useState(false);
+
+  async function downloadTemplate() {
+    try {
+      const res = await api.get("/equipment/template.csv", { responseType: "blob" });
+      const url = URL.createObjectURL(new Blob([res.data], { type: "text/csv" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "icf-inventory-template.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Failed to download template");
+    }
+  }
+
+  async function uploadCsv(e) {
+    e.preventDefault();
+    if (!importFile) {
+      toast.error("Choose a CSV file first");
+      return;
+    }
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", importFile);
+      const { data } = await api.post("/equipment/import", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setImportResult(data);
+      if (data.created_count > 0) toast.success(`Imported ${data.created_count} item${data.created_count !== 1 ? "s" : ""}`);
+      if (data.error_count > 0) toast.warning(`${data.error_count} row${data.error_count !== 1 ? "s" : ""} skipped`);
+      load();
+    } catch (err) {
+      toast.error(formatApiErrorDetail(err?.response?.data?.detail) || "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  // ─── History ─────────────────────────────────────────────────────────────
+  const [histOpen, setHistOpen] = useState(false);
+  const [histTarget, setHistTarget] = useState(null);
+  const [histLog, setHistLog] = useState([]);
+  const [histLoading, setHistLoading] = useState(false);
+
+  async function openHistory(item) {
+    setHistTarget(item);
+    setHistOpen(true);
+    setHistLog([]);
+    setHistLoading(true);
+    try {
+      const { data } = await api.get(`/equipment/${item.id}/history`);
+      setHistLog(data);
+    } catch (err) {
+      toast.error("Failed to load history");
+    } finally {
+      setHistLoading(false);
+    }
+  }
+
   return (
     <div className="p-6 sm:p-8 lg:p-10 max-w-[1500px]" data-testid="equipment-page">
       <div className="flex items-end justify-between gap-4 mb-6 flex-wrap">
@@ -138,13 +207,23 @@ export default function Equipment() {
           <h1 className="font-display font-black text-4xl sm:text-5xl tracking-tight text-zinc-900 mt-2">Equipment</h1>
           <p className="text-zinc-500 mt-1 text-sm">{items.length} SKU{items.length !== 1 ? "s" : ""} · {items.reduce((s, i) => s + i.quantity, 0)} total units · Use <span className="inline-flex items-center gap-0.5 font-mono"><Minus size={10} weight="bold"/> / <Plus size={10} weight="bold"/></span> on a row to quick-adjust stock</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={openCreate} data-testid="add-equipment-btn"
-              className="bg-orange-600 hover:bg-orange-700 text-white rounded-sm font-display font-semibold uppercase tracking-wider gap-2">
-              <Plus size={16} weight="bold" /> Add Equipment
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => { setImportResult(null); setImportFile(null); setImportOpen(true); }}
+            data-testid="import-csv-btn"
+            className="rounded-sm font-display font-semibold uppercase tracking-wider gap-2"
+          >
+            <Upload size={16} weight="bold" /> Import CSV
+          </Button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={openCreate} data-testid="add-equipment-btn"
+                className="bg-orange-600 hover:bg-orange-700 text-white rounded-sm font-display font-semibold uppercase tracking-wider gap-2">
+                <Plus size={16} weight="bold" /> Add Equipment
+              </Button>
+            </DialogTrigger>
           <DialogContent className="rounded-sm max-w-lg">
             <DialogHeader>
               <DialogTitle className="font-display font-bold text-2xl">
@@ -207,6 +286,7 @@ export default function Equipment() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {loading ? (
@@ -275,6 +355,9 @@ export default function Equipment() {
                   <td className="p-3 font-mono text-zinc-900">${item.daily_rate}</td>
                   <td className="p-3 text-zinc-600">{item.location || "—"}</td>
                   <td className="p-3 flex gap-1">
+                    <button onClick={() => openHistory(item)} className="p-1.5 hover:bg-blue-100 text-blue-700 rounded-sm" data-testid={`history-${item.id}`} aria-label="History" title="Stock history">
+                      <ClockCounterClockwise size={14} />
+                    </button>
                     <button onClick={() => openAdjust(item, 1)} className="p-1.5 hover:bg-orange-100 text-orange-700 rounded-sm" data-testid={`adjust-${item.id}`} aria-label="Adjust stock" title="Bulk adjust stock">
                       <ArrowsClockwise size={14} />
                     </button>
@@ -378,6 +461,180 @@ export default function Equipment() {
                 </Button>
               </DialogFooter>
             </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* CSV Import dialog */}
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="rounded-sm max-w-lg" data-testid="import-dialog">
+          <DialogHeader>
+            <DialogTitle className="font-display font-bold text-2xl flex items-center gap-2">
+              <FileCsv size={24} weight="fill" className="text-orange-600" />
+              Import inventory from CSV
+            </DialogTitle>
+          </DialogHeader>
+
+          {!importResult ? (
+            <form onSubmit={uploadCsv} className="space-y-4" data-testid="import-form">
+              <div className="border border-zinc-200 bg-zinc-50 p-4 text-sm">
+                <div className="label-eyebrow mb-2">Expected columns</div>
+                <div className="font-mono text-xs text-zinc-700 leading-relaxed">
+                  name, category, condition, location, daily_rate, quantity, serial, notes
+                </div>
+                <div className="text-xs text-zinc-500 mt-2 leading-relaxed">
+                  • <strong>name</strong> + <strong>quantity</strong> are required<br />
+                  • category: brace, waler, strongback, alignment, scaffold, tool, other<br />
+                  • condition: excellent, good, fair, poor, retired<br />
+                  • Invalid categories/conditions are normalized; bad rows are skipped.
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={downloadTemplate}
+                  data-testid="download-template-btn"
+                  className="mt-3 rounded-sm font-display uppercase tracking-wider text-xs gap-1.5 h-8"
+                >
+                  <DownloadSimple size={12} weight="bold" /> Download template
+                </Button>
+              </div>
+
+              <div>
+                <Label className="label-eyebrow">CSV file</Label>
+                <Input
+                  type="file"
+                  accept=".csv,text/csv"
+                  required
+                  onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                  className="rounded-sm mt-1 cursor-pointer file:mr-3 file:py-1 file:px-3 file:rounded-sm file:border-0 file:bg-zinc-900 file:text-white file:font-display file:text-xs file:uppercase file:tracking-wider hover:file:bg-zinc-800"
+                  data-testid="csv-file-input"
+                />
+                {importFile && (
+                  <div className="text-xs text-zinc-500 mt-1.5 font-mono">
+                    {importFile.name} · {(importFile.size / 1024).toFixed(1)} KB
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button type="button" variant="outline" onClick={() => setImportOpen(false)} className="rounded-sm font-display uppercase tracking-wider">
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={!importFile || importing} data-testid="import-submit"
+                  className="bg-orange-600 hover:bg-orange-700 text-white rounded-sm font-display uppercase tracking-wider gap-2">
+                  <Upload size={14} weight="bold" />
+                  {importing ? "Importing…" : "Import"}
+                </Button>
+              </DialogFooter>
+            </form>
+          ) : (
+            <div className="space-y-4" data-testid="import-result">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="border border-green-300 bg-green-50 p-4">
+                  <div className="label-eyebrow text-green-700">Created</div>
+                  <div className="font-display font-black text-3xl text-green-800 mt-1">{importResult.created_count}</div>
+                </div>
+                <div className={`border p-4 ${importResult.error_count > 0 ? "border-red-300 bg-red-50" : "border-zinc-200 bg-zinc-50"}`}>
+                  <div className={`label-eyebrow ${importResult.error_count > 0 ? "text-red-700" : ""}`}>Skipped</div>
+                  <div className={`font-display font-black text-3xl mt-1 ${importResult.error_count > 0 ? "text-red-800" : "text-zinc-900"}`}>{importResult.error_count}</div>
+                </div>
+              </div>
+              {importResult.errors?.length > 0 && (
+                <div className="max-h-60 overflow-y-auto border border-zinc-200 text-sm">
+                  <table className="w-full">
+                    <thead className="bg-zinc-100 sticky top-0">
+                      <tr>
+                        <th className="text-left p-2 font-display font-bold uppercase tracking-wider text-xs">Row</th>
+                        <th className="text-left p-2 font-display font-bold uppercase tracking-wider text-xs">Name</th>
+                        <th className="text-left p-2 font-display font-bold uppercase tracking-wider text-xs">Error</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importResult.errors.map((er, idx) => (
+                        <tr key={idx} className={idx % 2 ? "bg-zinc-50" : ""}>
+                          <td className="p-2 font-mono text-zinc-700">{er.row}</td>
+                          <td className="p-2 text-zinc-800">{er.name || <em className="text-zinc-400">(blank)</em>}</td>
+                          <td className="p-2 text-red-700">{er.error}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <DialogFooter className="gap-2">
+                <Button type="button" variant="outline" onClick={() => { setImportResult(null); setImportFile(null); }} className="rounded-sm font-display uppercase tracking-wider" data-testid="import-another">
+                  Import another file
+                </Button>
+                <Button type="button" onClick={() => setImportOpen(false)} className="bg-orange-600 hover:bg-orange-700 text-white rounded-sm font-display uppercase tracking-wider" data-testid="import-done">
+                  Done
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* History dialog */}
+      <Dialog open={histOpen} onOpenChange={setHistOpen}>
+        <DialogContent className="rounded-sm max-w-2xl" data-testid="history-dialog">
+          <DialogHeader>
+            <DialogTitle className="font-display font-bold text-2xl flex items-center gap-2">
+              <ClockCounterClockwise size={22} weight="fill" className="text-blue-600" />
+              Stock history
+            </DialogTitle>
+          </DialogHeader>
+          {histTarget && (
+            <>
+              <div className="border border-zinc-200 p-3 bg-zinc-50 text-sm flex items-center justify-between">
+                <div>
+                  <div className="label-eyebrow">Item</div>
+                  <div className="font-display font-medium text-zinc-900 mt-1">{histTarget.name}</div>
+                </div>
+                <div className="text-right">
+                  <div className="label-eyebrow">Current qty</div>
+                  <div className="font-display font-bold text-2xl text-zinc-900 mt-1">{histTarget.quantity}</div>
+                </div>
+              </div>
+
+              <div className="max-h-[420px] overflow-y-auto border border-zinc-200">
+                {histLoading ? (
+                  <div className="p-8 text-center text-zinc-500 text-sm">Loading history…</div>
+                ) : histLog.length === 0 ? (
+                  <div className="p-8 text-center text-zinc-500 text-sm">No history entries yet.</div>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead className="bg-zinc-100 sticky top-0">
+                      <tr>
+                        <th className="text-left p-2.5 font-display font-bold uppercase tracking-wider text-xs">When</th>
+                        <th className="text-right p-2.5 font-display font-bold uppercase tracking-wider text-xs">Delta</th>
+                        <th className="text-left p-2.5 font-display font-bold uppercase tracking-wider text-xs">Reason</th>
+                        <th className="text-left p-2.5 font-display font-bold uppercase tracking-wider text-xs">By</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {histLog.map((h, idx) => (
+                        <tr key={h.id} className={idx % 2 ? "bg-zinc-50" : ""} data-testid={`hist-row-${h.id}`}>
+                          <td className="p-2.5 font-mono text-xs text-zinc-700 whitespace-nowrap">
+                            {new Date(h.created_at).toLocaleString()}
+                          </td>
+                          <td className={`p-2.5 text-right font-mono font-bold ${h.delta > 0 ? "text-green-700" : h.delta < 0 ? "text-red-700" : "text-zinc-700"}`}>
+                            {h.delta > 0 ? "+" : ""}{h.delta}
+                          </td>
+                          <td className="p-2.5 text-zinc-800">{h.reason || "—"}</td>
+                          <td className="p-2.5 text-zinc-600 text-xs">{h.user_email || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              <DialogFooter>
+                <Button type="button" onClick={() => setHistOpen(false)} className="rounded-sm font-display uppercase tracking-wider bg-zinc-900 hover:bg-zinc-800 text-white" data-testid="hist-close">
+                  Close
+                </Button>
+              </DialogFooter>
+            </>
           )}
         </DialogContent>
       </Dialog>
