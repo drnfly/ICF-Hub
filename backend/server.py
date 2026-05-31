@@ -550,11 +550,26 @@ async def csv_template(user: dict = Depends(get_current_user)):
 
 
 @api.post("/equipment/import")
-async def import_equipment_csv(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+async def import_equipment_csv(
+    file: UploadFile = File(...),
+    mode: str = "create",
+    user: dict = Depends(get_current_user),
+):
     """
-    Import equipment from CSV. Expected columns (case-insensitive):
+    Import equipment from CSV.
+
+    Modes:
+      • create  — insert new rows only; skip rows whose serial/name already exists
+      • update  — only update existing matched rows (set fields to CSV values); skip unmatched
+      • add     — increment quantity of matched rows by CSV `quantity`; create row if no match
+
+    Matching priority: `serial` (exact, when non-empty) → `name` (exact, case-insensitive).
+    Expected columns (case-insensitive):
     name, category, condition, location, daily_rate, quantity, serial, notes
     """
+    if mode not in {"create", "update", "add"}:
+        raise HTTPException(status_code=400, detail="mode must be one of: create, update, add")
+
     fname = (file.filename or "").lower()
     if not fname.endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a .csv")
@@ -572,56 +587,153 @@ async def import_equipment_csv(file: UploadFile = File(...), user: dict = Depend
         raise HTTPException(status_code=400, detail="No header row found")
 
     created = []
+    updated = []
+    skipped = []
     errors = []
-    row_index = 1  # header is row 1
+    row_index = 1
     for raw_row in reader:
         row_index += 1
         try:
             norm = {(k or "").strip().lower(): (v.strip() if isinstance(v, str) else v)
                     for k, v in raw_row.items() if k}
             name = norm.get("name") or ""
-            if not name:
-                raise ValueError("missing 'name'")
-            qty_raw = norm.get("quantity") or norm.get("qty") or "1"
-            rate_raw = norm.get("daily_rate") or norm.get("rate") or "0"
-            data = {
-                "name": name,
-                "category": (norm.get("category") or "other").lower(),
-                "condition": (norm.get("condition") or "good").lower(),
-                "location": norm.get("location") or None,
-                "daily_rate": float(rate_raw or 0),
-                "quantity": int(float(qty_raw or 1)),
-                "serial": norm.get("serial") or None,
-                "notes": norm.get("notes") or None,
-            }
-            if data["category"] not in VALID_CATEGORIES:
-                data["category"] = "other"
-            if data["condition"] not in VALID_CONDITIONS:
-                data["condition"] = "good"
-            if data["quantity"] < 0:
-                raise ValueError("quantity must be >= 0")
-            data["available"] = data["quantity"]
-            data["created_at"] = now_utc()
-            res = await db.equipment.insert_one(data)
-            data["_id"] = res.inserted_id
-            await db.stock_adjustments.insert_one({
-                "equipment_id": str(res.inserted_id),
-                "delta": data["quantity"],
-                "reason": f"CSV import — row {row_index}",
-                "user_id": str(user["_id"]),
-                "user_email": user["email"],
-                "created_at": now_utc(),
-            })
-            created.append(serialize_equipment(data))
+            serial = norm.get("serial") or ""
+            if not name and not serial:
+                raise ValueError("missing both 'name' and 'serial' — need at least one")
+
+            qty_raw = norm.get("quantity") or norm.get("qty")
+            rate_raw = norm.get("daily_rate") or norm.get("rate")
+
+            # find existing match
+            existing = None
+            if serial:
+                existing = await db.equipment.find_one({"serial": serial})
+            if not existing and name:
+                existing = await db.equipment.find_one({
+                    "name": {"$regex": f"^{name}$", "$options": "i"}
+                })
+
+            if mode == "create":
+                if existing:
+                    skipped.append({"row": row_index, "name": name or serial, "reason": "already exists"})
+                    continue
+                if not name:
+                    raise ValueError("'name' is required for create")
+                data = _row_to_equipment(norm, name, qty_raw, rate_raw)
+                res = await db.equipment.insert_one(data)
+                data["_id"] = res.inserted_id
+                await _log_stock(res.inserted_id, data["quantity"], f"CSV import — row {row_index}", user)
+                created.append(serialize_equipment(data))
+
+            elif mode == "update":
+                if not existing:
+                    skipped.append({"row": row_index, "name": name or serial, "reason": "no match found"})
+                    continue
+                # only set fields that are present (non-empty) in the row
+                update_doc = {}
+                if name:
+                    update_doc["name"] = name
+                if (norm.get("category") or "").lower() in VALID_CATEGORIES:
+                    update_doc["category"] = norm["category"].lower()
+                if (norm.get("condition") or "").lower() in VALID_CONDITIONS:
+                    update_doc["condition"] = norm["condition"].lower()
+                if norm.get("location") is not None and norm.get("location") != "":
+                    update_doc["location"] = norm["location"]
+                if rate_raw not in (None, ""):
+                    update_doc["daily_rate"] = float(rate_raw)
+                if serial:
+                    update_doc["serial"] = serial
+                if norm.get("notes"):
+                    update_doc["notes"] = norm["notes"]
+                qty_delta = 0
+                if qty_raw not in (None, ""):
+                    new_qty = int(float(qty_raw))
+                    old_qty = existing.get("quantity", 1)
+                    qty_delta = new_qty - old_qty
+                    update_doc["quantity"] = new_qty
+                    new_avail = max(0, existing.get("available", old_qty) + qty_delta)
+                    update_doc["available"] = new_avail
+                await db.equipment.update_one({"_id": existing["_id"]}, {"$set": update_doc})
+                if qty_delta != 0:
+                    await _log_stock(existing["_id"], qty_delta, f"CSV update — row {row_index}", user)
+                refreshed = {**existing, **update_doc}
+                updated.append(serialize_equipment(refreshed))
+
+            else:  # mode == "add"
+                if not existing:
+                    if not name:
+                        raise ValueError("'name' is required to create when no match found")
+                    data = _row_to_equipment(norm, name, qty_raw, rate_raw)
+                    res = await db.equipment.insert_one(data)
+                    data["_id"] = res.inserted_id
+                    await _log_stock(res.inserted_id, data["quantity"], f"CSV add — row {row_index} (new SKU)", user)
+                    created.append(serialize_equipment(data))
+                else:
+                    if qty_raw in (None, ""):
+                        skipped.append({"row": row_index, "name": name or serial, "reason": "no quantity to add"})
+                        continue
+                    delta = int(float(qty_raw))
+                    new_qty = existing.get("quantity", 0) + delta
+                    new_avail = existing.get("available", existing.get("quantity", 0)) + delta
+                    if new_qty < 0 or new_avail < 0:
+                        raise ValueError(f"adding {delta} would push qty below zero")
+                    await db.equipment.update_one(
+                        {"_id": existing["_id"]},
+                        {"$set": {"quantity": new_qty, "available": new_avail}},
+                    )
+                    await _log_stock(existing["_id"], delta, f"CSV add — row {row_index}", user)
+                    refreshed = {**existing, "quantity": new_qty, "available": new_avail}
+                    updated.append(serialize_equipment(refreshed))
+
         except Exception as e:
-            errors.append({"row": row_index, "error": str(e), "name": raw_row.get("name") or raw_row.get("Name", "")})
+            errors.append({
+                "row": row_index,
+                "error": str(e),
+                "name": raw_row.get("name") or raw_row.get("Name", ""),
+            })
 
     return {
+        "mode": mode,
         "created_count": len(created),
+        "updated_count": len(updated),
+        "skipped_count": len(skipped),
         "error_count": len(errors),
-        "errors": errors[:50],  # cap to avoid huge payloads
+        "errors": errors[:50],
+        "skipped": skipped[:50],
         "created": created,
+        "updated": updated,
     }
+
+
+def _row_to_equipment(norm: dict, name: str, qty_raw, rate_raw) -> dict:
+    cat = (norm.get("category") or "other").lower()
+    cond = (norm.get("condition") or "good").lower()
+    data = {
+        "name": name,
+        "category": cat if cat in VALID_CATEGORIES else "other",
+        "condition": cond if cond in VALID_CONDITIONS else "good",
+        "location": norm.get("location") or None,
+        "daily_rate": float(rate_raw or 0),
+        "quantity": int(float(qty_raw or 1)),
+        "serial": norm.get("serial") or None,
+        "notes": norm.get("notes") or None,
+    }
+    if data["quantity"] < 0:
+        raise ValueError("quantity must be >= 0")
+    data["available"] = data["quantity"]
+    data["created_at"] = now_utc()
+    return data
+
+
+async def _log_stock(equipment_id, delta: int, reason: str, user: dict):
+    await db.stock_adjustments.insert_one({
+        "equipment_id": str(equipment_id),
+        "delta": delta,
+        "reason": reason,
+        "user_id": str(user["_id"]),
+        "user_email": user["email"],
+        "created_at": now_utc(),
+    })
 
 
 @api.get("/equipment/{equipment_id}/history")

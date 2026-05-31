@@ -134,6 +134,7 @@ export default function Equipment() {
   // ─── CSV import ──────────────────────────────────────────────────────────
   const [importOpen, setImportOpen] = useState(false);
   const [importFile, setImportFile] = useState(null);
+  const [importMode, setImportMode] = useState("create");
   const [importResult, setImportResult] = useState(null);
   const [importing, setImporting] = useState(false);
 
@@ -164,12 +165,16 @@ export default function Equipment() {
     try {
       const fd = new FormData();
       fd.append("file", importFile);
-      const { data } = await api.post("/equipment/import", fd, {
+      const { data } = await api.post(`/equipment/import?mode=${importMode}`, fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setImportResult(data);
-      if (data.created_count > 0) toast.success(`Imported ${data.created_count} item${data.created_count !== 1 ? "s" : ""}`);
-      if (data.error_count > 0) toast.warning(`${data.error_count} row${data.error_count !== 1 ? "s" : ""} skipped`);
+      const parts = [];
+      if (data.created_count > 0) parts.push(`+${data.created_count} created`);
+      if (data.updated_count > 0) parts.push(`${data.updated_count} updated`);
+      if (data.skipped_count > 0) parts.push(`${data.skipped_count} skipped`);
+      if (parts.length) toast.success(parts.join(" · "));
+      if (data.error_count > 0) toast.warning(`${data.error_count} error${data.error_count !== 1 ? "s" : ""}`);
       load();
     } catch (err) {
       toast.error(formatApiErrorDetail(err?.response?.data?.detail) || "Import failed");
@@ -477,16 +482,47 @@ export default function Equipment() {
 
           {!importResult ? (
             <form onSubmit={uploadCsv} className="space-y-4" data-testid="import-form">
+              <div>
+                <Label className="label-eyebrow mb-2 block">Import mode</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { v: "create", label: "Create new", desc: "Add new SKUs · skip duplicates" },
+                    { v: "update", label: "Update existing", desc: "Replace fields on matches" },
+                    { v: "add", label: "Add to qty", desc: "Increment matched, create rest" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.v}
+                      type="button"
+                      onClick={() => setImportMode(opt.v)}
+                      data-testid={`import-mode-${opt.v}`}
+                      className={`text-left p-3 border rounded-sm transition-all ${
+                        importMode === opt.v
+                          ? "border-orange-600 bg-orange-50 ring-1 ring-orange-600"
+                          : "border-zinc-200 bg-white hover:border-zinc-400"
+                      }`}
+                    >
+                      <div className={`font-display font-bold text-xs uppercase tracking-wider ${importMode === opt.v ? "text-orange-700" : "text-zinc-900"}`}>
+                        {opt.label}
+                      </div>
+                      <div className="text-[10px] text-zinc-600 mt-1 leading-tight">{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+                <div className="text-[11px] text-zinc-500 mt-2 leading-snug">
+                  Matching: <span className="font-mono">serial</span> first, then case-insensitive <span className="font-mono">name</span>.
+                </div>
+              </div>
+
               <div className="border border-zinc-200 bg-zinc-50 p-4 text-sm">
                 <div className="label-eyebrow mb-2">Expected columns</div>
                 <div className="font-mono text-xs text-zinc-700 leading-relaxed">
                   name, category, condition, location, daily_rate, quantity, serial, notes
                 </div>
                 <div className="text-xs text-zinc-500 mt-2 leading-relaxed">
-                  • <strong>name</strong> + <strong>quantity</strong> are required<br />
+                  • <strong>name</strong> + <strong>quantity</strong> required for new rows<br />
+                  • For update/add: <strong>serial</strong> or <strong>name</strong> must match an existing SKU<br />
                   • category: brace, waler, strongback, alignment, scaffold, tool, other<br />
-                  • condition: excellent, good, fair, poor, retired<br />
-                  • Invalid categories/conditions are normalized; bad rows are skipped.
+                  • condition: excellent, good, fair, poor, retired
                 </div>
                 <Button
                   type="button"
@@ -530,32 +566,48 @@ export default function Equipment() {
             </form>
           ) : (
             <div className="space-y-4" data-testid="import-result">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="border border-green-300 bg-green-50 p-4">
-                  <div className="label-eyebrow text-green-700">Created</div>
-                  <div className="font-display font-black text-3xl text-green-800 mt-1">{importResult.created_count}</div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className={`border p-3 ${importResult.created_count > 0 ? "border-green-300 bg-green-50" : "border-zinc-200 bg-zinc-50"}`}>
+                  <div className={`label-eyebrow ${importResult.created_count > 0 ? "text-green-700" : ""}`}>Created</div>
+                  <div className={`font-display font-black text-3xl mt-1 ${importResult.created_count > 0 ? "text-green-800" : "text-zinc-400"}`}>{importResult.created_count}</div>
                 </div>
-                <div className={`border p-4 ${importResult.error_count > 0 ? "border-red-300 bg-red-50" : "border-zinc-200 bg-zinc-50"}`}>
-                  <div className={`label-eyebrow ${importResult.error_count > 0 ? "text-red-700" : ""}`}>Skipped</div>
-                  <div className={`font-display font-black text-3xl mt-1 ${importResult.error_count > 0 ? "text-red-800" : "text-zinc-900"}`}>{importResult.error_count}</div>
+                <div className={`border p-3 ${importResult.updated_count > 0 ? "border-blue-300 bg-blue-50" : "border-zinc-200 bg-zinc-50"}`}>
+                  <div className={`label-eyebrow ${importResult.updated_count > 0 ? "text-blue-700" : ""}`}>Updated</div>
+                  <div className={`font-display font-black text-3xl mt-1 ${importResult.updated_count > 0 ? "text-blue-800" : "text-zinc-400"}`}>{importResult.updated_count}</div>
+                </div>
+                <div className={`border p-3 ${(importResult.skipped_count + importResult.error_count) > 0 ? "border-yellow-300 bg-yellow-50" : "border-zinc-200 bg-zinc-50"}`}>
+                  <div className={`label-eyebrow ${(importResult.skipped_count + importResult.error_count) > 0 ? "text-yellow-700" : ""}`}>Skipped / Errors</div>
+                  <div className={`font-display font-black text-3xl mt-1 ${(importResult.skipped_count + importResult.error_count) > 0 ? "text-yellow-800" : "text-zinc-400"}`}>
+                    {importResult.skipped_count + importResult.error_count}
+                  </div>
                 </div>
               </div>
-              {importResult.errors?.length > 0 && (
+              <div className="text-xs text-zinc-500">
+                Mode: <span className="font-mono font-semibold text-zinc-900">{importResult.mode}</span>
+              </div>
+              {(importResult.errors?.length > 0 || importResult.skipped?.length > 0) && (
                 <div className="max-h-60 overflow-y-auto border border-zinc-200 text-sm">
                   <table className="w-full">
                     <thead className="bg-zinc-100 sticky top-0">
                       <tr>
                         <th className="text-left p-2 font-display font-bold uppercase tracking-wider text-xs">Row</th>
                         <th className="text-left p-2 font-display font-bold uppercase tracking-wider text-xs">Name</th>
-                        <th className="text-left p-2 font-display font-bold uppercase tracking-wider text-xs">Error</th>
+                        <th className="text-left p-2 font-display font-bold uppercase tracking-wider text-xs">Reason</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {importResult.errors.map((er, idx) => (
-                        <tr key={idx} className={idx % 2 ? "bg-zinc-50" : ""}>
+                      {importResult.errors?.map((er, idx) => (
+                        <tr key={`e${idx}`} className={idx % 2 ? "bg-zinc-50" : ""}>
                           <td className="p-2 font-mono text-zinc-700">{er.row}</td>
                           <td className="p-2 text-zinc-800">{er.name || <em className="text-zinc-400">(blank)</em>}</td>
                           <td className="p-2 text-red-700">{er.error}</td>
+                        </tr>
+                      ))}
+                      {importResult.skipped?.map((sk, idx) => (
+                        <tr key={`s${idx}`} className="bg-yellow-50/50">
+                          <td className="p-2 font-mono text-zinc-700">{sk.row}</td>
+                          <td className="p-2 text-zinc-800">{sk.name || <em className="text-zinc-400">(blank)</em>}</td>
+                          <td className="p-2 text-yellow-800">{sk.reason}</td>
                         </tr>
                       ))}
                     </tbody>
