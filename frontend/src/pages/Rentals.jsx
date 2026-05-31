@@ -18,6 +18,7 @@ const plusDays = (d) => {
 
 const statusColors = {
   active: "bg-blue-100 text-blue-800 border-blue-300",
+  partial: "bg-orange-100 text-orange-800 border-orange-300",
   returned: "bg-green-100 text-green-800 border-green-300",
   lost: "bg-red-100 text-red-800 border-red-300",
   overdue: "bg-red-100 text-red-800 border-red-300",
@@ -38,7 +39,7 @@ export default function Rentals() {
     start_date: today(), due_date: plusDays(14),
     deposit: 0, notes: "",
   });
-  const [retForm, setRetForm] = useState({ return_date: today(), condition_on_return: "good", damage_fee: 0, notes: "" });
+  const [retForm, setRetForm] = useState({ return_date: today(), condition_on_return: "good", damage_fee: 0, notes: "", items: [] });
   const [custForm, setCustForm] = useState({ name: "", company: "", phone: "", email: "", address: "" });
 
   async function load() {
@@ -101,10 +102,20 @@ export default function Rentals() {
 
   async function processReturn(ev) {
     ev.preventDefault();
+    const items = retForm.items
+      .filter((i) => Number(i.quantity) > 0)
+      .map((i) => ({ equipment_id: i.equipment_id, quantity: Number(i.quantity) }));
+    if (items.length === 0) {
+      toast.error("Set a return quantity for at least one item");
+      return;
+    }
     try {
       await api.post(`/rentals/${returnTarget.id}/return`, {
-        ...retForm,
+        return_date: retForm.return_date,
+        condition_on_return: retForm.condition_on_return,
         damage_fee: Number(retForm.damage_fee),
+        notes: retForm.notes,
+        items,
       });
       toast.success("Return processed");
       setRetOpen(false);
@@ -129,12 +140,30 @@ export default function Rentals() {
 
   function openReturn(r) {
     setReturnTarget(r);
-    setRetForm({ return_date: today(), condition_on_return: "good", damage_fee: 0, notes: "" });
+    setRetForm({
+      return_date: today(),
+      condition_on_return: "good",
+      damage_fee: 0,
+      notes: "",
+      items: (r.items || []).map((it) => ({
+        equipment_id: it.equipment_id,
+        equipment_name: it.equipment_name,
+        outstanding: it.outstanding,
+        quantity: it.outstanding,  // default = return everything outstanding
+      })),
+    });
     setRetOpen(true);
   }
 
-  const activeRentals = rentals.filter((r) => r.status === "active");
-  const closedRentals = rentals.filter((r) => r.status !== "active");
+  function setRetItem(idx, patch) {
+    setRetForm((f) => ({
+      ...f,
+      items: f.items.map((it, i) => (i === idx ? { ...it, ...patch } : it)),
+    }));
+  }
+
+  const activeRentals = rentals.filter((r) => r.status === "active" || r.status === "partial");
+  const closedRentals = rentals.filter((r) => r.status !== "active" && r.status !== "partial");
   const todayStr = today();
 
   return (
@@ -311,23 +340,67 @@ export default function Rentals() {
                 <div className="label-eyebrow">Rental</div>
                 <div className="font-display font-medium text-zinc-900 mt-1">{returnTarget.items_summary}</div>
                 <div className="text-xs text-zinc-500">{returnTarget.customer_name} · due {returnTarget.due_date}</div>
-                {(returnTarget.items?.length || 0) > 1 && (
-                  <ul className="mt-2 ml-3 text-xs space-y-0.5">
-                    {returnTarget.items.map((it, idx) => (
-                      <li key={idx} className="text-zinc-700">
-                        <span className="font-mono text-zinc-900">{it.quantity}×</span> {it.equipment_name}
-                      </li>
-                    ))}
-                  </ul>
+                {returnTarget.status === "partial" && (
+                  <div className="text-[10px] uppercase tracking-wider font-display font-semibold text-orange-700 mt-1">
+                    Partial — {returnTarget.total_outstanding} units still out
+                  </div>
                 )}
               </div>
+
+              <div className="space-y-2">
+                <Label className="label-eyebrow">Return per item</Label>
+                <div className="border border-zinc-200">
+                  <table className="w-full text-sm">
+                    <thead className="bg-zinc-100">
+                      <tr>
+                        <th className="text-left p-2 font-display font-bold uppercase tracking-wider text-[10px] text-zinc-700">Equipment</th>
+                        <th className="text-right p-2 font-display font-bold uppercase tracking-wider text-[10px] text-zinc-700">Outstanding</th>
+                        <th className="text-right p-2 font-display font-bold uppercase tracking-wider text-[10px] text-zinc-700 w-28">Return qty</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {retForm.items.map((it, idx) => (
+                        <tr key={it.equipment_id} className={idx % 2 ? "bg-zinc-50" : ""} data-testid={`ret-item-${idx}`}>
+                          <td className="p-2 text-zinc-900 font-display font-medium">{it.equipment_name}</td>
+                          <td className="p-2 text-right font-mono text-zinc-700">{it.outstanding}</td>
+                          <td className="p-2">
+                            <div className="flex items-center gap-1 justify-end">
+                              <Input
+                                type="number"
+                                min="0"
+                                max={it.outstanding}
+                                value={it.quantity}
+                                onChange={(e) => setRetItem(idx, { quantity: e.target.value })}
+                                className="rounded-sm h-8 w-20 text-right font-mono"
+                                data-testid={`ret-qty-${idx}`}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setRetItem(idx, { quantity: 0 })}
+                                className="text-[10px] uppercase tracking-wider font-display text-zinc-500 hover:text-orange-700 px-1"
+                                data-testid={`ret-keep-${idx}`}
+                              >
+                                keep
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="text-[11px] text-zinc-500 leading-snug">
+                  Set qty to <span className="font-mono">0</span> (or click <span className="font-mono">keep</span>) to leave that SKU out on the job. The rental stays open as <span className="font-display font-semibold uppercase tracking-wider text-orange-700">partial</span> until everything comes back.
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="label-eyebrow">Return date</Label>
                   <Input type="date" required value={retForm.return_date} onChange={(e) => setRetForm({ ...retForm, return_date: e.target.value })} className="rounded-sm mt-1" data-testid="ret-date" />
                 </div>
                 <div>
-                  <Label className="label-eyebrow">Condition</Label>
+                  <Label className="label-eyebrow">Condition (default)</Label>
                   <Select value={retForm.condition_on_return} onValueChange={(v) => setRetForm({ ...retForm, condition_on_return: v })}>
                     <SelectTrigger className="rounded-sm mt-1" data-testid="ret-cond"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -378,7 +451,8 @@ function RentalTable({ rentals, onReturn, todayStr }) {
         </thead>
         <tbody>
           {rentals.map((r, i) => {
-            const isOverdue = r.status === "active" && r.due_date < todayStr;
+            const stillOpen = r.status === "active" || r.status === "partial";
+            const isOverdue = stillOpen && r.due_date < todayStr;
             const displayStatus = isOverdue ? "overdue" : r.status;
             const multi = (r.items?.length || 0) > 1;
             return (

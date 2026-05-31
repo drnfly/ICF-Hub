@@ -198,11 +198,18 @@ class RentalIn(BaseModel):
     notes: Optional[str] = None
 
 
+class ReturnItemIn(BaseModel):
+    equipment_id: str
+    quantity: int = Field(ge=0)  # 0 = keep this item out, do not return any of it now
+    condition: Optional[Literal["excellent", "good", "fair", "poor", "damaged", "lost"]] = None  # overrides default
+
+
 class RentalReturnIn(BaseModel):
     return_date: str
     condition_on_return: Literal["excellent", "good", "fair", "poor", "damaged", "lost"] = "good"
     damage_fee: float = Field(ge=0, default=0)
     notes: Optional[str] = None
+    items: Optional[List[ReturnItemIn]] = None  # None = full return of every outstanding item
 
 
 # Maintenance
@@ -800,7 +807,7 @@ async def _check_sku_availability(equipment_id: str, start_d, end_d, qty: Option
             {"items.equipment_id": equipment_id},
             {"equipment_id": equipment_id},  # legacy flat docs
         ],
-        "status": {"$ne": "returned"},
+        "status": {"$nin": ["returned", "lost"]},
     }).to_list(2000)
     bookings = await db.bookings.find({
         "equipment_id": equipment_id,
@@ -811,7 +818,10 @@ async def _check_sku_availability(equipment_id: str, start_d, end_d, qty: Option
     rental_windows = []
     for r in rentals:
         items = rental_items(r)
-        qty_for_sku = sum(it.get("quantity", 0) for it in items if it["equipment_id"] == equipment_id)
+        qty_for_sku = sum(
+            max(0, it.get("quantity", 0) - it.get("returned_quantity", 0))
+            for it in items if it["equipment_id"] == equipment_id
+        )
         if qty_for_sku == 0:
             continue
         occ_start = r.get("start_date", "")
@@ -1051,6 +1061,7 @@ def rental_items(doc: dict) -> list:
             "equipment_id": doc["equipment_id"],
             "quantity": doc.get("quantity", 1),
             "daily_rate": doc.get("daily_rate", 0),
+            "returned_quantity": 0,
         }]
     return []
 
@@ -1060,13 +1071,18 @@ def serialize_rental(doc: dict, eq_map: Optional[dict] = None, cust: Optional[di
     enriched = []
     for it in items:
         eq = (eq_map or {}).get(it["equipment_id"]) if eq_map else None
+        returned = it.get("returned_quantity", 0)
+        qty = it.get("quantity", 1)
         enriched.append({
             "equipment_id": it["equipment_id"],
             "equipment_name": (eq or {}).get("name"),
-            "quantity": it.get("quantity", 1),
+            "quantity": qty,
+            "returned_quantity": returned,
+            "outstanding": max(0, qty - returned),
             "daily_rate": it.get("daily_rate", 0),
         })
     total_qty = sum(i.get("quantity", 0) for i in items)
+    total_outstanding = sum(i["outstanding"] for i in enriched)
     summary = (
         f"{enriched[0]['equipment_name']} × {enriched[0]['quantity']}"
         if len(enriched) == 1 else f"{len(enriched)} SKUs · {total_qty} units"
@@ -1078,6 +1094,7 @@ def serialize_rental(doc: dict, eq_map: Optional[dict] = None, cust: Optional[di
         "items": enriched,
         "items_summary": summary,
         "total_quantity": total_qty,
+        "total_outstanding": total_outstanding,
         "start_date": doc["start_date"],
         "due_date": doc["due_date"],
         "return_date": doc.get("return_date"),
@@ -1086,6 +1103,7 @@ def serialize_rental(doc: dict, eq_map: Optional[dict] = None, cust: Optional[di
         "condition_on_return": doc.get("condition_on_return"),
         "damage_fee": doc.get("damage_fee", 0),
         "notes": doc.get("notes"),
+        "returns": doc.get("returns", []),
         "created_at": doc.get("created_at").isoformat() if isinstance(doc.get("created_at"), datetime) else doc.get("created_at"),
     }
 
@@ -1132,6 +1150,7 @@ async def create_rental(payload: RentalIn, user: dict = Depends(get_current_user
         items_resolved.append({
             "equipment_id": it.equipment_id,
             "quantity": it.quantity,
+            "returned_quantity": 0,
             "daily_rate": it.daily_rate if it.daily_rate is not None else eq.get("daily_rate", 0),
         })
 
@@ -1160,35 +1179,106 @@ async def return_rental(rental_id: str, payload: RentalReturnIn, user: dict = De
     if not rental:
         raise HTTPException(status_code=404, detail="Rental not found")
     if rental.get("status") == "returned":
-        raise HTTPException(status_code=400, detail="Rental already returned")
-    update = {
-        "status": "returned" if payload.condition_on_return != "lost" else "lost",
-        "return_date": payload.return_date,
-        "condition_on_return": payload.condition_on_return,
+        raise HTTPException(status_code=400, detail="Rental already fully returned")
+
+    items = rental_items(rental)
+    # Normalize stored items in DB shape (in case legacy flat doc) so we can update in place
+    if not rental.get("items"):
+        await db.rentals.update_one({"_id": rental["_id"]}, {"$set": {"items": items}})
+        rental["items"] = items
+
+    # Build return plan: equipment_id -> {qty, condition}
+    plan: dict = {}
+    if payload.items is None:
+        # full return — close every outstanding unit
+        for it in items:
+            outstanding = it.get("quantity", 0) - it.get("returned_quantity", 0)
+            if outstanding > 0:
+                plan[it["equipment_id"]] = {"qty": outstanding, "condition": payload.condition_on_return}
+    else:
+        for r in payload.items:
+            if r.quantity <= 0:
+                continue
+            match = next((it for it in items if it["equipment_id"] == r.equipment_id), None)
+            if not match:
+                raise HTTPException(status_code=400, detail=f"Item {r.equipment_id} not on this rental")
+            outstanding = match.get("quantity", 0) - match.get("returned_quantity", 0)
+            if r.quantity > outstanding:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Returning {r.quantity} of {r.equipment_id} but only {outstanding} outstanding",
+                )
+            plan[r.equipment_id] = {"qty": r.quantity, "condition": r.condition or payload.condition_on_return}
+
+    if not plan:
+        raise HTTPException(status_code=400, detail="Nothing to return — every item has quantity 0")
+
+    # Apply per-item updates: increment returned_quantity, adjust equipment availability
+    return_event = {
+        "date": payload.return_date,
+        "user_email": user["email"],
+        "default_condition": payload.condition_on_return,
         "damage_fee": payload.damage_fee,
-        "notes": (rental.get("notes") or "") + ("\nReturn: " + payload.notes if payload.notes else ""),
+        "notes": payload.notes,
+        "items": [],
     }
-    await db.rentals.update_one({"_id": rental["_id"]}, {"$set": update})
-    # restore (or write-off) availability for every item
-    for it in rental_items(rental):
-        if payload.condition_on_return == "lost":
+    for eq_id, p in plan.items():
+        # Update item.returned_quantity inside rental.items array
+        await db.rentals.update_one(
+            {"_id": rental["_id"], "items.equipment_id": eq_id},
+            {"$inc": {"items.$.returned_quantity": p["qty"]}},
+        )
+        # adjust equipment stock
+        if p["condition"] == "lost":
             await db.equipment.update_one(
-                {"_id": ObjectId(it["equipment_id"])},
-                {"$inc": {"quantity": -it["quantity"]}},
+                {"_id": ObjectId(eq_id)},
+                {"$inc": {"quantity": -p["qty"]}},
             )
         else:
             await db.equipment.update_one(
-                {"_id": ObjectId(it["equipment_id"])},
-                {"$inc": {"available": it["quantity"]}},
+                {"_id": ObjectId(eq_id)},
+                {"$inc": {"available": p["qty"]}},
             )
-            if payload.condition_on_return in ("fair", "poor", "damaged"):
+            if p["condition"] in ("fair", "poor", "damaged"):
+                cond_to_set = "fair" if p["condition"] == "fair" else "poor"
                 await db.equipment.update_one(
-                    {"_id": ObjectId(it["equipment_id"])},
-                    {"$set": {"condition": "fair" if payload.condition_on_return == "fair" else "poor"}},
+                    {"_id": ObjectId(eq_id)},
+                    {"$set": {"condition": cond_to_set}},
                 )
-    rental.update(update)
-    # reload eq + cust for serialization
-    eq_ids = {ObjectId(it["equipment_id"]) for it in rental_items(rental)}
+        return_event["items"].append({
+            "equipment_id": eq_id,
+            "quantity": p["qty"],
+            "condition": p["condition"],
+        })
+
+    # Reload rental to compute new status
+    rental = await db.rentals.find_one({"_id": rental["_id"]})
+    items = rental_items(rental)
+    all_done = all((it.get("quantity", 0) - it.get("returned_quantity", 0)) <= 0 for it in items)
+    has_partial = any(it.get("returned_quantity", 0) > 0 for it in items)
+    new_status = "returned" if all_done else ("partial" if has_partial else rental.get("status", "active"))
+    any_lost = any(p["condition"] == "lost" for p in plan.values())
+    if all_done and any_lost and not any(p["condition"] != "lost" for p in plan.values()):
+        new_status = "lost"
+
+    update = {
+        "status": new_status,
+        "damage_fee": (rental.get("damage_fee", 0) or 0) + payload.damage_fee,
+        "notes": (rental.get("notes") or "") + ("\nReturn: " + payload.notes if payload.notes else ""),
+    }
+    if all_done:
+        update["return_date"] = payload.return_date
+        update["condition_on_return"] = payload.condition_on_return
+
+    await db.rentals.update_one(
+        {"_id": rental["_id"]},
+        {"$set": update, "$push": {"returns": return_event}},
+    )
+
+    # Reload to include the latest returns log + items state
+    rental = await db.rentals.find_one({"_id": rental["_id"]})
+    items = rental_items(rental)
+    eq_ids = {ObjectId(it["equipment_id"]) for it in items}
     eq_map = {str(e["_id"]): e for e in await db.equipment.find({"_id": {"$in": list(eq_ids)}}).to_list(1000)} if eq_ids else {}
     cust = await db.customers.find_one({"_id": ObjectId(rental["customer_id"])})
     return serialize_rental(rental, eq_map, cust)
@@ -1407,14 +1497,14 @@ async def dashboard_stats(user: dict = Depends(get_current_user)):
     total_units = sum(e.get("quantity", 1) for e in eq_docs)
     available_units = sum(e.get("available", e.get("quantity", 1)) for e in eq_docs)
     on_rent = total_units - available_units
-    active_rentals = await db.rentals.count_documents({"status": "active"})
+    active_rentals = await db.rentals.count_documents({"status": {"$in": ["active", "partial"]}})
 
     today_iso = now_utc().date().isoformat()
-    overdue = await db.rentals.count_documents({"status": "active", "due_date": {"$lt": today_iso}})
+    overdue = await db.rentals.count_documents({"status": {"$in": ["active", "partial"]}, "due_date": {"$lt": today_iso}})
 
     # Due in next 7 days
     soon = (now_utc() + timedelta(days=7)).date().isoformat()
-    due_soon = await db.rentals.count_documents({"status": "active", "due_date": {"$gte": today_iso, "$lte": soon}})
+    due_soon = await db.rentals.count_documents({"status": {"$in": ["active", "partial"]}, "due_date": {"$gte": today_iso, "$lte": soon}})
 
     # Maintenance due
     maint_due = await db.maintenance.count_documents({"next_service_date": {"$lte": today_iso}})
