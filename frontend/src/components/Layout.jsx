@@ -7,6 +7,7 @@ import {
   Calculator,
   Package,
   Receipt,
+  CalendarPlus,
   Wrench as WrenchIcon,
   CalendarBlank,
   SignOut,
@@ -20,6 +21,7 @@ const navItems = [
   { to: "/estimator", label: "Quick Estimator", icon: Calculator, testid: "nav-estimator" },
   { to: "/equipment", label: "Equipment", icon: Package, testid: "nav-equipment" },
   { to: "/rentals", label: "Rentals", icon: Receipt, testid: "nav-rentals" },
+  { to: "/bookings", label: "Bookings", icon: CalendarPlus, testid: "nav-bookings" },
   { to: "/calendar", label: "Calendar", icon: CalendarBlank, testid: "nav-calendar" },
   { to: "/maintenance", label: "Maintenance", icon: WrenchIcon, testid: "nav-maintenance" },
 ];

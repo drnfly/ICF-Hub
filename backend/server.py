@@ -212,6 +212,22 @@ class MaintenanceIn(BaseModel):
     notes: Optional[str] = None
 
 
+# Bookings (tentative / pipeline)
+class BookingIn(BaseModel):
+    customer_name: str = Field(min_length=1)
+    customer_id: Optional[str] = None  # link to existing customer if any
+    contact: Optional[str] = None  # phone or email for leads not yet in DB
+    equipment_id: str
+    quantity: int = Field(ge=1, default=1)
+    tentative_start_date: str
+    tentative_end_date: str
+    is_delivery: bool = False
+    delivery_address: Optional[str] = None
+    estimated_value: float = Field(ge=0, default=0)
+    probability: Literal["hot", "warm", "cold"] = "warm"
+    notes: Optional[str] = None
+
+
 # ----------------------------- Auth Endpoints --------------------------
 @api.post("/auth/register")
 async def register(payload: RegisterIn, response: Response):
@@ -961,6 +977,145 @@ async def create_maintenance(payload: MaintenanceIn, user: dict = Depends(get_cu
     return serialize_maint(doc, eq)
 
 
+# ----------------------------- Bookings (pipeline) --------------------
+def serialize_booking(doc: dict, eq: Optional[dict] = None) -> dict:
+    return {
+        "id": str(doc["_id"]),
+        "customer_name": doc["customer_name"],
+        "customer_id": doc.get("customer_id"),
+        "contact": doc.get("contact"),
+        "equipment_id": doc["equipment_id"],
+        "equipment_name": (eq or {}).get("name") if eq else doc.get("equipment_name"),
+        "quantity": doc.get("quantity", 1),
+        "tentative_start_date": doc["tentative_start_date"],
+        "tentative_end_date": doc["tentative_end_date"],
+        "is_delivery": doc.get("is_delivery", False),
+        "delivery_address": doc.get("delivery_address"),
+        "estimated_value": doc.get("estimated_value", 0),
+        "probability": doc.get("probability", "warm"),
+        "status": doc.get("status", "tentative"),
+        "notes": doc.get("notes"),
+        "converted_rental_id": doc.get("converted_rental_id"),
+        "created_at": doc.get("created_at").isoformat() if isinstance(doc.get("created_at"), datetime) else doc.get("created_at"),
+    }
+
+
+@api.get("/bookings")
+async def list_bookings(status_filter: Optional[str] = None, user: dict = Depends(get_current_user)):
+    q = {}
+    if status_filter:
+        q["status"] = status_filter
+    items = await db.bookings.find(q).sort("tentative_start_date", 1).to_list(1000)
+    eq_ids = {ObjectId(i["equipment_id"]) for i in items if i.get("equipment_id")}
+    eq_map = {str(e["_id"]): e for e in await db.equipment.find({"_id": {"$in": list(eq_ids)}}).to_list(1000)} if eq_ids else {}
+    return [serialize_booking(i, eq_map.get(i["equipment_id"])) for i in items]
+
+
+@api.post("/bookings")
+async def create_booking(payload: BookingIn, user: dict = Depends(get_current_user)):
+    eq = await db.equipment.find_one({"_id": ObjectId(payload.equipment_id)})
+    if not eq:
+        raise HTTPException(status_code=404, detail="Equipment not found")
+    if payload.tentative_end_date < payload.tentative_start_date:
+        raise HTTPException(status_code=400, detail="End date must be on or after start date")
+    doc = payload.model_dump()
+    doc["status"] = "tentative"
+    doc["created_at"] = now_utc()
+    doc["created_by"] = str(user["_id"])
+    res = await db.bookings.insert_one(doc)
+    doc["_id"] = res.inserted_id
+    return serialize_booking(doc, eq)
+
+
+@api.patch("/bookings/{booking_id}")
+async def update_booking(booking_id: str, payload: BookingIn, user: dict = Depends(get_current_user)):
+    booking = await db.bookings.find_one({"_id": ObjectId(booking_id)})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if booking.get("status") == "confirmed":
+        raise HTTPException(status_code=400, detail="Cannot edit a confirmed booking — edit its rental instead")
+    update = payload.model_dump()
+    await db.bookings.update_one({"_id": booking["_id"]}, {"$set": update})
+    booking.update(update)
+    eq = await db.equipment.find_one({"_id": ObjectId(booking["equipment_id"])})
+    return serialize_booking(booking, eq)
+
+
+@api.delete("/bookings/{booking_id}")
+async def cancel_booking(booking_id: str, user: dict = Depends(get_current_user)):
+    booking = await db.bookings.find_one({"_id": ObjectId(booking_id)})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if booking.get("status") == "confirmed":
+        raise HTTPException(status_code=400, detail="Booking already confirmed — cancel its rental instead")
+    await db.bookings.update_one({"_id": booking["_id"]}, {"$set": {"status": "cancelled"}})
+    return {"ok": True}
+
+
+@api.post("/bookings/{booking_id}/confirm")
+async def confirm_booking(booking_id: str, user: dict = Depends(get_current_user)):
+    """Promote a tentative booking into a real rental. Decrements equipment availability."""
+    booking = await db.bookings.find_one({"_id": ObjectId(booking_id)})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if booking.get("status") != "tentative":
+        raise HTTPException(status_code=400, detail=f"Booking status is '{booking.get('status')}' — only tentative bookings can be confirmed")
+
+    eq = await db.equipment.find_one({"_id": ObjectId(booking["equipment_id"])})
+    if not eq:
+        raise HTTPException(status_code=404, detail="Equipment no longer exists")
+
+    qty = booking.get("quantity", 1)
+    avail = eq.get("available", eq.get("quantity", 1))
+    if qty > avail:
+        raise HTTPException(status_code=400, detail=f"Only {avail} available — booking needs {qty}")
+
+    # resolve customer: link existing or create from booking customer_name
+    customer_id = booking.get("customer_id")
+    if not customer_id:
+        existing = await db.customers.find_one({"name": booking["customer_name"]})
+        if existing:
+            customer_id = str(existing["_id"])
+        else:
+            cust_doc = {
+                "name": booking["customer_name"],
+                "phone": booking.get("contact") if booking.get("contact") and "@" not in (booking.get("contact") or "") else None,
+                "email": booking.get("contact") if booking.get("contact") and "@" in (booking.get("contact") or "") else None,
+                "created_at": now_utc(),
+            }
+            res_c = await db.customers.insert_one(cust_doc)
+            customer_id = str(res_c.inserted_id)
+
+    rental_doc = {
+        "customer_id": customer_id,
+        "equipment_id": booking["equipment_id"],
+        "quantity": qty,
+        "start_date": booking["tentative_start_date"],
+        "due_date": booking["tentative_end_date"],
+        "deposit": 0,
+        "daily_rate": eq.get("daily_rate", 0),
+        "notes": (booking.get("notes") or "") + f" (Converted from booking #{booking_id})",
+        "status": "active",
+        "created_at": now_utc(),
+        "created_by": str(user["_id"]),
+        "from_booking_id": booking_id,
+    }
+    res = await db.rentals.insert_one(rental_doc)
+    rental_doc["_id"] = res.inserted_id
+
+    await db.equipment.update_one({"_id": eq["_id"]}, {"$inc": {"available": -qty}})
+    await db.bookings.update_one(
+        {"_id": booking["_id"]},
+        {"$set": {"status": "confirmed", "converted_rental_id": str(res.inserted_id), "confirmed_at": now_utc()}},
+    )
+
+    cust = await db.customers.find_one({"_id": ObjectId(customer_id)})
+    return {
+        "rental": serialize_rental(rental_doc, eq, cust),
+        "booking_id": booking_id,
+    }
+
+
 # ----------------------------- Dashboard -------------------------------
 @api.get("/dashboard/stats")
 async def dashboard_stats(user: dict = Depends(get_current_user)):
@@ -980,6 +1135,13 @@ async def dashboard_stats(user: dict = Depends(get_current_user)):
 
     # Maintenance due
     maint_due = await db.maintenance.count_documents({"next_service_date": {"$lte": today_iso}})
+
+    # Bookings pipeline
+    tentative_bookings = await db.bookings.count_documents({"status": "tentative"})
+    soon_starts = await db.bookings.count_documents({
+        "status": "tentative",
+        "tentative_start_date": {"$gte": today_iso, "$lte": soon},
+    })
 
     # Recent calculations
     recent_calcs = await db.calculations.find({}).sort("created_at", -1).limit(5).to_list(5)
@@ -1003,6 +1165,8 @@ async def dashboard_stats(user: dict = Depends(get_current_user)):
         "overdue_rentals": overdue,
         "due_soon_rentals": due_soon,
         "maintenance_due": maint_due,
+        "tentative_bookings": tentative_bookings,
+        "bookings_starting_soon": soon_starts,
         "recent_calculations": recent,
         "category_breakdown": [{"category": k, "count": v} for k, v in cat_breakdown.items()],
     }
@@ -1085,6 +1249,8 @@ async def startup():
     await db.rentals.create_index("status")
     await db.rentals.create_index("due_date")
     await db.maintenance.create_index("next_service_date")
+    await db.bookings.create_index("status")
+    await db.bookings.create_index("tentative_start_date")
     await seed_admin()
     await seed_demo_inventory()
 

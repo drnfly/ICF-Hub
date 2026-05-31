@@ -87,7 +87,7 @@ export default function Dashboard() {
       </div>
 
       {/* Alerts strip */}
-      {(stats.overdue_rentals > 0 || stats.maintenance_due > 0) && (
+      {(stats.overdue_rentals > 0 || stats.maintenance_due > 0 || stats.bookings_starting_soon > 0) && (
         <div className="mb-6 border-l-4 border-red-600 bg-red-50 px-4 py-3 flex flex-wrap items-center gap-4 text-sm" data-testid="alert-strip">
           <WarningCircle size={20} className="text-red-700 shrink-0" weight="fill" />
           {stats.overdue_rentals > 0 && (
@@ -98,6 +98,11 @@ export default function Dashboard() {
           {stats.maintenance_due > 0 && (
             <div className="text-red-800">
               <span className="font-display font-bold">{stats.maintenance_due}</span> item{stats.maintenance_due > 1 ? "s" : ""} due for service
+            </div>
+          )}
+          {stats.bookings_starting_soon > 0 && (
+            <div className="text-red-800">
+              <span className="font-display font-bold">{stats.bookings_starting_soon}</span> booking{stats.bookings_starting_soon > 1 ? "s" : ""} starting this week
             </div>
           )}
         </div>

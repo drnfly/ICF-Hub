@@ -21,12 +21,14 @@ function isoDate(d) {
 export default function CalendarPage() {
   const [rentals, setRentals] = useState([]);
   const [maint, setMaint] = useState([]);
+  const [bookings, setBookings] = useState([]);
   const today = new Date();
   const [cursor, setCursor] = useState({ year: today.getFullYear(), month: today.getMonth() });
 
   useEffect(() => {
     api.get("/rentals").then(({ data }) => setRentals(data));
     api.get("/maintenance").then(({ data }) => setMaint(data));
+    api.get("/bookings").then(({ data }) => setBookings(data));
   }, []);
 
   function eventsForDay(d) {
@@ -40,6 +42,13 @@ export default function CalendarPage() {
     });
     maint.forEach((m) => {
       if (m.next_service_date === iso) items.push({ type: "maint", label: `SVC: ${m.equipment_name || "equipment"}`, color: "bg-yellow-500" });
+    });
+    bookings.forEach((b) => {
+      if (b.status !== "tentative") return;
+      if (b.tentative_start_date === iso) {
+        const prefix = b.is_delivery ? "DELIVER" : "TENT";
+        items.push({ type: "booking", label: `${prefix}: ${b.customer_name}`, color: "bg-purple-600", dashed: true });
+      }
     });
     return items;
   }
@@ -81,6 +90,7 @@ export default function CalendarPage() {
         <Legend color="bg-orange-600" label="Due back" />
         <Legend color="bg-green-600" label="Returned" />
         <Legend color="bg-yellow-500" label="Service due" />
+        <Legend color="bg-purple-600" label="Tentative booking" dashed />
       </div>
 
       <div className="border border-zinc-200">
@@ -107,7 +117,11 @@ export default function CalendarPage() {
                     </div>
                     <div className="mt-1 space-y-0.5">
                       {events.slice(0, 3).map((e, idx) => (
-                        <div key={idx} className={`text-[10px] text-white ${e.color} px-1 py-0.5 truncate`} title={e.label}>
+                        <div
+                          key={idx}
+                          className={`text-[10px] text-white ${e.color} px-1 py-0.5 truncate ${e.dashed ? "border border-dashed border-white/60" : ""}`}
+                          title={e.label}
+                        >
                           {e.label}
                         </div>
                       ))}
@@ -126,10 +140,10 @@ export default function CalendarPage() {
   );
 }
 
-function Legend({ color, label }) {
+function Legend({ color, label, dashed }) {
   return (
     <div className="flex items-center gap-1.5">
-      <span className={`w-3 h-3 ${color}`} />
+      <span className={`w-3 h-3 ${color} ${dashed ? "border border-dashed border-zinc-900/40" : ""}`} />
       <span className="text-zinc-700">{label}</span>
     </div>
   );
