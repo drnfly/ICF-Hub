@@ -6,8 +6,10 @@ import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { toast } from "sonner";
 import {
-  CheckCircle, XCircle, Package, MagnifyingGlass, Warning, Plus, Trash, CaretRight,
+  CheckCircle, XCircle, Package, MagnifyingGlass, Warning, Plus, Trash, CaretRight, CalendarPlus,
 } from "@phosphor-icons/react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog";
+import { Switch } from "../components/ui/switch";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, CartesianGrid, Cell } from "recharts";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -24,6 +26,17 @@ export default function Capacity() {
   const [end, setEnd] = useState(plusDays(21));
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveForm, setSaveForm] = useState({
+    customer_name: "",
+    contact: "",
+    is_delivery: false,
+    delivery_address: "",
+    probability: "warm",
+    notes: "",
+    estimated_value: 0,
+  });
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     api.get("/equipment").then(({ data }) => {
@@ -78,6 +91,50 @@ export default function Capacity() {
       toast.error(formatApiErrorDetail(err?.response?.data?.detail) || "Check failed");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function saveAsBookings(e) {
+    e.preventDefault();
+    if (!result?.results?.length) return;
+    setSaving(true);
+    try {
+      const valuePerSku = result.results.length > 0
+        ? Number(saveForm.estimated_value) / result.results.length
+        : 0;
+      const bookings = result.results.map((r) => ({
+        customer_name: saveForm.customer_name,
+        contact: saveForm.contact || null,
+        equipment_id: r.equipment_id,
+        quantity: r.qty_requested,
+        tentative_start_date: result.start,
+        tentative_end_date: result.end,
+        is_delivery: saveForm.is_delivery,
+        delivery_address: saveForm.is_delivery ? saveForm.delivery_address : null,
+        estimated_value: valuePerSku,
+        probability: saveForm.probability,
+        notes: saveForm.notes,
+      }));
+      const { data } = await api.post("/bookings/bulk", { bookings });
+      if (data.error_count > 0) {
+        toast.warning(`${data.created_count} created · ${data.error_count} failed`);
+      } else {
+        toast.success(`${data.created_count} booking${data.created_count !== 1 ? "s" : ""} created`);
+      }
+      setSaveOpen(false);
+      setSaveForm({
+        customer_name: "",
+        contact: "",
+        is_delivery: false,
+        delivery_address: "",
+        probability: "warm",
+        notes: "",
+        estimated_value: 0,
+      });
+    } catch (err) {
+      toast.error(formatApiErrorDetail(err?.response?.data?.detail) || "Save failed");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -225,6 +282,136 @@ export default function Capacity() {
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Save as bookings */}
+              <div className="flex items-center justify-end gap-2">
+                <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
+                  <DialogTrigger asChild>
+                    <Button
+                      type="button"
+                      data-testid="save-as-bookings-btn"
+                      className="bg-zinc-900 hover:bg-zinc-800 text-white rounded-sm font-display uppercase tracking-wider gap-2"
+                    >
+                      <CalendarPlus size={14} weight="bold" />
+                      Save as {result.items_count} booking{result.items_count > 1 ? "s" : ""}
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="rounded-sm max-w-lg max-h-[90vh] overflow-y-auto" data-testid="save-bookings-dialog">
+                    <DialogHeader>
+                      <DialogTitle className="font-display font-bold text-2xl flex items-center gap-2">
+                        <CalendarPlus size={22} weight="fill" className="text-orange-600" />
+                        Save as bookings
+                      </DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={saveAsBookings} className="space-y-3" data-testid="save-bookings-form">
+                      <div className="border border-zinc-200 p-3 bg-zinc-50 text-sm">
+                        <div className="label-eyebrow mb-1">Window</div>
+                        <div className="font-mono text-zinc-900">{result.start} → {result.end}</div>
+                        <div className="label-eyebrow mt-2 mb-1">SKUs ({result.items_count})</div>
+                        <ul className="text-xs space-y-0.5">
+                          {result.results.map((r) => (
+                            <li key={r.equipment_id} className="font-mono text-zinc-700">
+                              {r.equipment_name} × {r.qty_requested}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div>
+                        <Label className="label-eyebrow">Customer / lead name</Label>
+                        <Input
+                          required
+                          value={saveForm.customer_name}
+                          onChange={(e) => setSaveForm({ ...saveForm, customer_name: e.target.value })}
+                          className="rounded-sm mt-1"
+                          data-testid="save-customer"
+                          placeholder="Big Sky Concrete or new lead"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="label-eyebrow">Contact</Label>
+                          <Input
+                            value={saveForm.contact}
+                            onChange={(e) => setSaveForm({ ...saveForm, contact: e.target.value })}
+                            className="rounded-sm mt-1"
+                            data-testid="save-contact"
+                            placeholder="phone or email"
+                          />
+                        </div>
+                        <div>
+                          <Label className="label-eyebrow">Est. value $ (total)</Label>
+                          <Input
+                            type="number" min="0" step="1"
+                            value={saveForm.estimated_value}
+                            onChange={(e) => setSaveForm({ ...saveForm, estimated_value: e.target.value })}
+                            className="rounded-sm mt-1"
+                            data-testid="save-value"
+                          />
+                          <div className="text-[10px] text-zinc-500 mt-0.5">split across SKUs</div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label className="label-eyebrow">Probability</Label>
+                        <Select value={saveForm.probability} onValueChange={(v) => setSaveForm({ ...saveForm, probability: v })}>
+                          <SelectTrigger className="rounded-sm mt-1" data-testid="save-prob"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="hot">Hot — verbal yes / PO ready</SelectItem>
+                            <SelectItem value="warm">Warm — strong interest</SelectItem>
+                            <SelectItem value="cold">Cold — just exploring</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="border border-zinc-200 p-3 rounded-sm bg-zinc-50/60">
+                        <div className="flex items-center justify-between">
+                          <Label className="label-eyebrow cursor-pointer" htmlFor="save_delivery">Delivery required</Label>
+                          <Switch
+                            id="save_delivery"
+                            checked={saveForm.is_delivery}
+                            onCheckedChange={(v) => setSaveForm({ ...saveForm, is_delivery: v })}
+                            data-testid="save-delivery"
+                          />
+                        </div>
+                        {saveForm.is_delivery && (
+                          <div className="mt-2">
+                            <Input
+                              value={saveForm.delivery_address}
+                              onChange={(e) => setSaveForm({ ...saveForm, delivery_address: e.target.value })}
+                              className="rounded-sm"
+                              placeholder="Delivery address"
+                              data-testid="save-address"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <Label className="label-eyebrow">Notes</Label>
+                        <Input
+                          value={saveForm.notes}
+                          onChange={(e) => setSaveForm({ ...saveForm, notes: e.target.value })}
+                          className="rounded-sm mt-1"
+                          placeholder="Job name, source, special handling…"
+                        />
+                      </div>
+
+                      <DialogFooter className="gap-2">
+                        <Button type="button" variant="outline" onClick={() => setSaveOpen(false)} className="rounded-sm font-display uppercase tracking-wider">
+                          Cancel
+                        </Button>
+                        <Button type="submit" disabled={saving}
+                          className="bg-orange-600 hover:bg-orange-700 text-white rounded-sm font-display uppercase tracking-wider gap-2"
+                          data-testid="save-bookings-submit">
+                          <CalendarPlus size={14} weight="bold" />
+                          {saving ? "Saving…" : `Save ${result.items_count} booking${result.items_count > 1 ? "s" : ""}`}
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
               </div>
 
               {/* Per-SKU breakdown */}

@@ -183,14 +183,18 @@ class CustomerIn(BaseModel):
 
 
 # Rental
-class RentalIn(BaseModel):
-    customer_id: str
+class RentalItemIn(BaseModel):
     equipment_id: str
     quantity: int = Field(ge=1, default=1)
+    daily_rate: Optional[float] = None
+
+
+class RentalIn(BaseModel):
+    customer_id: str
+    items: List[RentalItemIn] = Field(min_length=1, max_length=30)
     start_date: str  # ISO date
     due_date: str
     deposit: float = Field(ge=0, default=0)
-    daily_rate: Optional[float] = None
     notes: Optional[str] = None
 
 
@@ -792,7 +796,10 @@ async def _check_sku_availability(equipment_id: str, start_d, end_d, qty: Option
     total_qty = eq.get("quantity", 0)
 
     rentals = await db.rentals.find({
-        "equipment_id": equipment_id,
+        "$or": [
+            {"items.equipment_id": equipment_id},
+            {"equipment_id": equipment_id},  # legacy flat docs
+        ],
         "status": {"$ne": "returned"},
     }).to_list(2000)
     bookings = await db.bookings.find({
@@ -800,11 +807,31 @@ async def _check_sku_availability(equipment_id: str, start_d, end_d, qty: Option
         "status": "tentative",
     }).to_list(2000)
 
+    # build (start, end, qty) per rental — sum across all matching items in one rental
+    rental_windows = []
+    for r in rentals:
+        items = rental_items(r)
+        qty_for_sku = sum(it.get("quantity", 0) for it in items if it["equipment_id"] == equipment_id)
+        if qty_for_sku == 0:
+            continue
+        occ_start = r.get("start_date", "")
+        occ_end = r.get("return_date") or r.get("due_date", "")
+        rental_windows.append({
+            "id": str(r["_id"]),
+            "qty": qty_for_sku,
+            "occ_start": occ_start,
+            "occ_end": occ_end,
+            "customer_id": r.get("customer_id"),
+            "status": r.get("status"),
+            "start_date": occ_start,
+            "due_date": r.get("due_date"),
+        })
+
     days = []
     min_available = total_qty
     worst_day = None
     blocked_dates = []
-    conflicting_rentals = set()
+    conflicting_rental_ids = set()
     conflicting_bookings = set()
 
     cur = start_d
@@ -812,12 +839,10 @@ async def _check_sku_availability(equipment_id: str, start_d, end_d, qty: Option
         iso = cur.isoformat()
         on_rent = 0
         on_hold = 0
-        for r in rentals:
-            occ_start = r.get("start_date", "")
-            occ_end = r.get("return_date") or r.get("due_date", "")
-            if occ_start <= iso <= occ_end:
-                on_rent += r.get("quantity", 0)
-                conflicting_rentals.add(str(r["_id"]))
+        for rw in rental_windows:
+            if rw["occ_start"] <= iso <= rw["occ_end"]:
+                on_rent += rw["qty"]
+                conflicting_rental_ids.add(rw["id"])
         for b in bookings:
             occ_start = b.get("tentative_start_date", "")
             occ_end = b.get("tentative_end_date", "")
@@ -842,19 +867,19 @@ async def _check_sku_availability(equipment_id: str, start_d, end_d, qty: Option
         cur += timedelta(days=1)
 
     conflict_rental_docs = []
-    if conflicting_rentals:
-        ids = [ObjectId(x) for x in conflicting_rentals]
-        rs = await db.rentals.find({"_id": {"$in": ids}}).to_list(1000)
-        cust_ids = {ObjectId(r["customer_id"]) for r in rs}
-        cust_map = {str(c["_id"]): c for c in await db.customers.find({"_id": {"$in": list(cust_ids)}}).to_list(1000)}
-        for r in rs:
+    if conflicting_rental_ids:
+        cust_ids = {ObjectId(rw["customer_id"]) for rw in rental_windows if rw["id"] in conflicting_rental_ids and rw.get("customer_id")}
+        cust_map = {str(c["_id"]): c for c in await db.customers.find({"_id": {"$in": list(cust_ids)}}).to_list(1000)} if cust_ids else {}
+        for rw in rental_windows:
+            if rw["id"] not in conflicting_rental_ids:
+                continue
             conflict_rental_docs.append({
-                "id": str(r["_id"]),
-                "customer_name": cust_map.get(r["customer_id"], {}).get("name", "Unknown"),
-                "quantity": r.get("quantity", 0),
-                "start_date": r.get("start_date"),
-                "due_date": r.get("due_date"),
-                "status": r.get("status"),
+                "id": rw["id"],
+                "customer_name": cust_map.get(rw.get("customer_id"), {}).get("name", "Unknown"),
+                "quantity": rw["qty"],
+                "start_date": rw["start_date"],
+                "due_date": rw["due_date"],
+                "status": rw["status"],
             })
     conflict_booking_docs = []
     if conflicting_bookings:
@@ -1017,19 +1042,46 @@ async def create_customer(payload: CustomerIn, user: dict = Depends(get_current_
 
 
 # ----------------------------- Rentals ---------------------------------
-def serialize_rental(doc: dict, eq: Optional[dict] = None, cust: Optional[dict] = None) -> dict:
+def rental_items(doc: dict) -> list:
+    """Return items list, migrating legacy flat (equipment_id/quantity) docs on the fly."""
+    if doc.get("items"):
+        return doc["items"]
+    if doc.get("equipment_id"):
+        return [{
+            "equipment_id": doc["equipment_id"],
+            "quantity": doc.get("quantity", 1),
+            "daily_rate": doc.get("daily_rate", 0),
+        }]
+    return []
+
+
+def serialize_rental(doc: dict, eq_map: Optional[dict] = None, cust: Optional[dict] = None) -> dict:
+    items = rental_items(doc)
+    enriched = []
+    for it in items:
+        eq = (eq_map or {}).get(it["equipment_id"]) if eq_map else None
+        enriched.append({
+            "equipment_id": it["equipment_id"],
+            "equipment_name": (eq or {}).get("name"),
+            "quantity": it.get("quantity", 1),
+            "daily_rate": it.get("daily_rate", 0),
+        })
+    total_qty = sum(i.get("quantity", 0) for i in items)
+    summary = (
+        f"{enriched[0]['equipment_name']} × {enriched[0]['quantity']}"
+        if len(enriched) == 1 else f"{len(enriched)} SKUs · {total_qty} units"
+    )
     return {
         "id": str(doc["_id"]),
         "customer_id": doc["customer_id"],
         "customer_name": (cust or {}).get("name") if cust else doc.get("customer_name"),
-        "equipment_id": doc["equipment_id"],
-        "equipment_name": (eq or {}).get("name") if eq else doc.get("equipment_name"),
-        "quantity": doc.get("quantity", 1),
+        "items": enriched,
+        "items_summary": summary,
+        "total_quantity": total_qty,
         "start_date": doc["start_date"],
         "due_date": doc["due_date"],
         "return_date": doc.get("return_date"),
         "deposit": doc.get("deposit", 0),
-        "daily_rate": doc.get("daily_rate", 0),
         "status": doc.get("status", "active"),
         "condition_on_return": doc.get("condition_on_return"),
         "damage_fee": doc.get("damage_fee", 0),
@@ -1044,35 +1096,62 @@ async def list_rentals(status_filter: Optional[str] = None, user: dict = Depends
     if status_filter:
         q["status"] = status_filter
     items = await db.rentals.find(q).sort("start_date", -1).to_list(1000)
-    # enrich
-    eq_ids = {ObjectId(i["equipment_id"]) for i in items}
-    cust_ids = {ObjectId(i["customer_id"]) for i in items}
+    # collect equipment + customer ids across all rentals (multi-item aware)
+    eq_ids = set()
+    cust_ids = set()
+    for r in items:
+        for it in rental_items(r):
+            eq_ids.add(ObjectId(it["equipment_id"]))
+        if r.get("customer_id"):
+            cust_ids.add(ObjectId(r["customer_id"]))
     eq_map = {str(e["_id"]): e for e in await db.equipment.find({"_id": {"$in": list(eq_ids)}}).to_list(1000)} if eq_ids else {}
     cust_map = {str(c["_id"]): c for c in await db.customers.find({"_id": {"$in": list(cust_ids)}}).to_list(1000)} if cust_ids else {}
-    return [serialize_rental(i, eq_map.get(i["equipment_id"]), cust_map.get(i["customer_id"])) for i in items]
+    return [serialize_rental(i, eq_map, cust_map.get(i["customer_id"])) for i in items]
 
 
 @api.post("/rentals")
 async def create_rental(payload: RentalIn, user: dict = Depends(get_current_user)):
-    eq = await db.equipment.find_one({"_id": ObjectId(payload.equipment_id)})
-    if not eq:
-        raise HTTPException(status_code=404, detail="Equipment not found")
     cust = await db.customers.find_one({"_id": ObjectId(payload.customer_id)})
     if not cust:
         raise HTTPException(status_code=404, detail="Customer not found")
-    avail = eq.get("available", eq.get("quantity", 1))
-    if payload.quantity > avail:
-        raise HTTPException(status_code=400, detail=f"Only {avail} available for {eq['name']}")
-    doc = payload.model_dump()
-    doc["status"] = "active"
-    doc["daily_rate"] = doc.get("daily_rate") or eq.get("daily_rate", 0)
-    doc["created_at"] = now_utc()
-    doc["created_by"] = str(user["_id"])
+    # dedupe + verify availability for every item
+    seen = set()
+    items_resolved = []
+    eq_map: dict = {}
+    for it in payload.items:
+        if it.equipment_id in seen:
+            raise HTTPException(status_code=400, detail="Same SKU listed twice — merge the rows")
+        seen.add(it.equipment_id)
+        eq = await db.equipment.find_one({"_id": ObjectId(it.equipment_id)})
+        if not eq:
+            raise HTTPException(status_code=404, detail=f"Equipment not found: {it.equipment_id}")
+        avail = eq.get("available", eq.get("quantity", 1))
+        if it.quantity > avail:
+            raise HTTPException(status_code=400, detail=f"Only {avail} {eq['name']} available — requested {it.quantity}")
+        eq_map[str(eq["_id"])] = eq
+        items_resolved.append({
+            "equipment_id": it.equipment_id,
+            "quantity": it.quantity,
+            "daily_rate": it.daily_rate if it.daily_rate is not None else eq.get("daily_rate", 0),
+        })
+
+    doc = {
+        "customer_id": payload.customer_id,
+        "items": items_resolved,
+        "start_date": payload.start_date,
+        "due_date": payload.due_date,
+        "deposit": payload.deposit,
+        "notes": payload.notes,
+        "status": "active",
+        "created_at": now_utc(),
+        "created_by": str(user["_id"]),
+    }
     res = await db.rentals.insert_one(doc)
     doc["_id"] = res.inserted_id
-    # decrement availability
-    await db.equipment.update_one({"_id": eq["_id"]}, {"$inc": {"available": -payload.quantity}})
-    return serialize_rental(doc, eq, cust)
+    # decrement availability for every item
+    for it in items_resolved:
+        await db.equipment.update_one({"_id": ObjectId(it["equipment_id"])}, {"$inc": {"available": -it["quantity"]}})
+    return serialize_rental(doc, eq_map, cust)
 
 
 @api.post("/rentals/{rental_id}/return")
@@ -1090,24 +1169,29 @@ async def return_rental(rental_id: str, payload: RentalReturnIn, user: dict = De
         "notes": (rental.get("notes") or "") + ("\nReturn: " + payload.notes if payload.notes else ""),
     }
     await db.rentals.update_one({"_id": rental["_id"]}, {"$set": update})
-    # restore available qty (unless lost - keep removed and reduce inventory)
-    if payload.condition_on_return == "lost":
-        await db.equipment.update_one(
-            {"_id": ObjectId(rental["equipment_id"])},
-            {"$inc": {"quantity": -rental["quantity"]}},
-        )
-    else:
-        await db.equipment.update_one(
-            {"_id": ObjectId(rental["equipment_id"])},
-            {"$inc": {"available": rental["quantity"]}},
-        )
-        if payload.condition_on_return in ("fair", "poor", "damaged"):
+    # restore (or write-off) availability for every item
+    for it in rental_items(rental):
+        if payload.condition_on_return == "lost":
             await db.equipment.update_one(
-                {"_id": ObjectId(rental["equipment_id"])},
-                {"$set": {"condition": "fair" if payload.condition_on_return == "fair" else "poor"}},
+                {"_id": ObjectId(it["equipment_id"])},
+                {"$inc": {"quantity": -it["quantity"]}},
             )
+        else:
+            await db.equipment.update_one(
+                {"_id": ObjectId(it["equipment_id"])},
+                {"$inc": {"available": it["quantity"]}},
+            )
+            if payload.condition_on_return in ("fair", "poor", "damaged"):
+                await db.equipment.update_one(
+                    {"_id": ObjectId(it["equipment_id"])},
+                    {"$set": {"condition": "fair" if payload.condition_on_return == "fair" else "poor"}},
+                )
     rental.update(update)
-    return serialize_rental(rental)
+    # reload eq + cust for serialization
+    eq_ids = {ObjectId(it["equipment_id"]) for it in rental_items(rental)}
+    eq_map = {str(e["_id"]): e for e in await db.equipment.find({"_id": {"$in": list(eq_ids)}}).to_list(1000)} if eq_ids else {}
+    cust = await db.customers.find_one({"_id": ObjectId(rental["customer_id"])})
+    return serialize_rental(rental, eq_map, cust)
 
 
 # ----------------------------- Maintenance -----------------------------
@@ -1257,12 +1341,14 @@ async def confirm_booking(booking_id: str, user: dict = Depends(get_current_user
 
     rental_doc = {
         "customer_id": customer_id,
-        "equipment_id": booking["equipment_id"],
-        "quantity": qty,
+        "items": [{
+            "equipment_id": booking["equipment_id"],
+            "quantity": qty,
+            "daily_rate": eq.get("daily_rate", 0),
+        }],
         "start_date": booking["tentative_start_date"],
         "due_date": booking["tentative_end_date"],
         "deposit": 0,
-        "daily_rate": eq.get("daily_rate", 0),
         "notes": (booking.get("notes") or "") + f" (Converted from booking #{booking_id})",
         "status": "active",
         "created_at": now_utc(),
@@ -1280,9 +1366,37 @@ async def confirm_booking(booking_id: str, user: dict = Depends(get_current_user
 
     cust = await db.customers.find_one({"_id": ObjectId(customer_id)})
     return {
-        "rental": serialize_rental(rental_doc, eq, cust),
+        "rental": serialize_rental(rental_doc, {str(eq["_id"]): eq}, cust),
         "booking_id": booking_id,
     }
+
+
+class BulkBookingsIn(BaseModel):
+    bookings: List[BookingIn] = Field(min_length=1, max_length=30)
+
+
+@api.post("/bookings/bulk")
+async def create_bookings_bulk(payload: BulkBookingsIn, user: dict = Depends(get_current_user)):
+    """Create many bookings in one shot (e.g. from a multi-SKU capacity check)."""
+    created = []
+    errors = []
+    for idx, item in enumerate(payload.bookings):
+        try:
+            eq = await db.equipment.find_one({"_id": ObjectId(item.equipment_id)})
+            if not eq:
+                raise ValueError("equipment not found")
+            if item.tentative_end_date < item.tentative_start_date:
+                raise ValueError("end < start")
+            doc = item.model_dump()
+            doc["status"] = "tentative"
+            doc["created_at"] = now_utc()
+            doc["created_by"] = str(user["_id"])
+            res = await db.bookings.insert_one(doc)
+            doc["_id"] = res.inserted_id
+            created.append(serialize_booking(doc, eq))
+        except Exception as e:
+            errors.append({"index": idx, "error": str(e), "customer": item.customer_name})
+    return {"created_count": len(created), "error_count": len(errors), "created": created, "errors": errors}
 
 
 # ----------------------------- Dashboard -------------------------------

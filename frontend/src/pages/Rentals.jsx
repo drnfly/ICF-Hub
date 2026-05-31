@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { toast } from "sonner";
-import { Plus, Receipt, ArrowUUpLeft } from "@phosphor-icons/react";
+import { Plus, Receipt, ArrowUUpLeft, Trash } from "@phosphor-icons/react";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const plusDays = (d) => {
@@ -33,7 +33,8 @@ export default function Rentals() {
   const [custOpen, setCustOpen] = useState(false);
 
   const [form, setForm] = useState({
-    customer_id: "", equipment_id: "", quantity: 1,
+    customer_id: "",
+    items: [{ equipment_id: "", quantity: 1 }],
     start_date: today(), due_date: plusDays(14),
     deposit: 0, notes: "",
   });
@@ -52,17 +53,46 @@ export default function Rentals() {
   }
   useEffect(() => { load(); }, []);
 
+  function setItem(idx, patch) {
+    setForm((f) => ({ ...f, items: f.items.map((it, i) => (i === idx ? { ...it, ...patch } : it)) }));
+  }
+  function addItem() {
+    setForm((f) => ({ ...f, items: [...f.items, { equipment_id: "", quantity: 1 }] }));
+  }
+  function removeItem(idx) {
+    setForm((f) => ({ ...f, items: f.items.length > 1 ? f.items.filter((_, i) => i !== idx) : f.items }));
+  }
+
+  function resetForm() {
+    setForm({
+      customer_id: "",
+      items: [{ equipment_id: "", quantity: 1 }],
+      start_date: today(), due_date: plusDays(14),
+      deposit: 0, notes: "",
+    });
+  }
+
   async function createRental(ev) {
     ev.preventDefault();
+    const payloadItems = form.items
+      .filter((i) => i.equipment_id && Number(i.quantity) > 0)
+      .map((i) => ({ equipment_id: i.equipment_id, quantity: Number(i.quantity) }));
+    if (payloadItems.length === 0) {
+      toast.error("Add at least one SKU");
+      return;
+    }
     try {
       await api.post("/rentals", {
-        ...form,
-        quantity: Number(form.quantity),
+        customer_id: form.customer_id,
+        items: payloadItems,
+        start_date: form.start_date,
+        due_date: form.due_date,
         deposit: Number(form.deposit),
+        notes: form.notes,
       });
       toast.success("Rental created");
       setOpen(false);
-      setForm({ customer_id: "", equipment_id: "", quantity: 1, start_date: today(), due_date: plusDays(14), deposit: 0, notes: "" });
+      resetForm();
       load();
     } catch (err) {
       toast.error(formatApiErrorDetail(err?.response?.data?.detail) || "Failed");
@@ -159,7 +189,7 @@ export default function Rentals() {
                 <Plus size={14} weight="bold" /> New Rental
               </Button>
             </DialogTrigger>
-            <DialogContent className="rounded-sm max-w-lg">
+            <DialogContent className="rounded-sm max-w-xl max-h-[90vh] overflow-y-auto">
               <DialogHeader><DialogTitle className="font-display font-bold text-2xl">New rental</DialogTitle></DialogHeader>
               <form onSubmit={createRental} className="space-y-3" data-testid="rental-form">
                 <div>
@@ -171,28 +201,69 @@ export default function Rentals() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <Label className="label-eyebrow">Equipment</Label>
-                  <Select value={form.equipment_id} onValueChange={(v) => setForm({ ...form, equipment_id: v })}>
-                    <SelectTrigger className="rounded-sm mt-1" data-testid="rental-equipment"><SelectValue placeholder="Select equipment" /></SelectTrigger>
-                    <SelectContent>
-                      {equipment.map((e) => (
-                        <SelectItem key={e.id} value={e.id} disabled={e.available === 0}>
-                          {e.name} — {e.available} avail @ ${e.daily_rate}/day
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="label-eyebrow">Quantity</Label>
-                    <Input type="number" min="1" required value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} className="rounded-sm mt-1" data-testid="rental-qty" />
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="label-eyebrow">Equipment items</Label>
+                    <Button type="button" variant="outline" size="sm" onClick={addItem}
+                      disabled={form.items.length >= equipment.length}
+                      data-testid="rental-add-item"
+                      className="rounded-sm font-display uppercase tracking-wider text-xs gap-1 h-8">
+                      <Plus size={12} weight="bold" /> Add SKU
+                    </Button>
                   </div>
+                  {form.items.map((it, idx) => {
+                    const eqSel = equipment.find((e) => e.id === it.equipment_id);
+                    return (
+                      <div key={idx} className="border border-zinc-200 p-3 rounded-sm bg-zinc-50/40 space-y-2" data-testid={`rental-item-${idx}`}>
+                        <div className="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
+                          <Select value={it.equipment_id} onValueChange={(v) => setItem(idx, { equipment_id: v })}>
+                            <SelectTrigger className="rounded-sm" data-testid={`rental-eq-${idx}`}>
+                              <SelectValue placeholder="Select equipment" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {equipment.map((e) => (
+                                <SelectItem key={e.id} value={e.id} disabled={e.available === 0}>
+                                  {e.name} — {e.available} avail @ ${e.daily_rate}/day
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            type="number" min="1" required
+                            value={it.quantity}
+                            onChange={(e) => setItem(idx, { quantity: e.target.value })}
+                            className="rounded-sm w-24 text-center font-mono"
+                            data-testid={`rental-qty-${idx}`}
+                            placeholder="qty"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeItem(idx)}
+                            disabled={form.items.length <= 1}
+                            className="p-2 hover:bg-red-100 text-red-700 rounded-sm disabled:opacity-30 disabled:cursor-not-allowed"
+                            data-testid={`rental-remove-${idx}`}
+                            aria-label="Remove SKU"
+                          >
+                            <Trash size={14} />
+                          </button>
+                        </div>
+                        {eqSel && Number(it.quantity) > eqSel.available && (
+                          <div className="text-[11px] text-red-700 pl-1">
+                            Only {eqSel.available} available — request exceeds stock
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="label-eyebrow">Deposit $</Label>
                     <Input type="number" min="0" step="1" value={form.deposit} onChange={(e) => setForm({ ...form, deposit: e.target.value })} className="rounded-sm mt-1" data-testid="rental-deposit" />
                   </div>
+                  <div />
                   <div>
                     <Label className="label-eyebrow">Start</Label>
                     <Input type="date" required value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} className="rounded-sm mt-1" data-testid="rental-start" />
@@ -238,8 +309,17 @@ export default function Rentals() {
             <form onSubmit={processReturn} className="space-y-3" data-testid="return-form">
               <div className="border border-zinc-200 p-3 bg-zinc-50 text-sm">
                 <div className="label-eyebrow">Rental</div>
-                <div className="font-display font-medium text-zinc-900 mt-1">{returnTarget.equipment_name} × {returnTarget.quantity}</div>
+                <div className="font-display font-medium text-zinc-900 mt-1">{returnTarget.items_summary}</div>
                 <div className="text-xs text-zinc-500">{returnTarget.customer_name} · due {returnTarget.due_date}</div>
+                {(returnTarget.items?.length || 0) > 1 && (
+                  <ul className="mt-2 ml-3 text-xs space-y-0.5">
+                    {returnTarget.items.map((it, idx) => (
+                      <li key={idx} className="text-zinc-700">
+                        <span className="font-mono text-zinc-900">{it.quantity}×</span> {it.equipment_name}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -291,7 +371,7 @@ function RentalTable({ rentals, onReturn, todayStr }) {
       <table className="w-full text-sm">
         <thead className="bg-zinc-100">
           <tr>
-            {["Customer", "Equipment", "Qty", "Start", "Due", "Status", "Deposit", "Actions"].map((h) => (
+            {["Customer", "Items", "Total qty", "Start", "Due", "Status", "Deposit", "Actions"].map((h) => (
               <th key={h} className="text-left p-3 font-display font-bold uppercase tracking-wider text-xs text-zinc-700 whitespace-nowrap">{h}</th>
             ))}
           </tr>
@@ -300,11 +380,29 @@ function RentalTable({ rentals, onReturn, todayStr }) {
           {rentals.map((r, i) => {
             const isOverdue = r.status === "active" && r.due_date < todayStr;
             const displayStatus = isOverdue ? "overdue" : r.status;
+            const multi = (r.items?.length || 0) > 1;
             return (
               <tr key={r.id} className={i % 2 ? "bg-zinc-50" : "bg-white"} data-testid={`rental-row-${r.id}`}>
                 <td className="p-3 font-display font-medium text-zinc-900">{r.customer_name}</td>
-                <td className="p-3 text-zinc-700">{r.equipment_name}</td>
-                <td className="p-3 font-mono text-zinc-900">{r.quantity}</td>
+                <td className="p-3 text-zinc-700">
+                  {multi ? (
+                    <details className="cursor-pointer">
+                      <summary className="font-display font-medium text-zinc-900 hover:text-orange-600">
+                        {r.items_summary}
+                      </summary>
+                      <ul className="mt-1 ml-4 text-xs space-y-0.5">
+                        {(r.items || []).map((it, idx) => (
+                          <li key={idx} className="text-zinc-600">
+                            <span className="text-zinc-900">{it.equipment_name || "—"}</span> × <span className="font-mono">{it.quantity}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  ) : (
+                    <span>{r.items_summary}</span>
+                  )}
+                </td>
+                <td className="p-3 font-mono text-zinc-900">{r.total_quantity}</td>
                 <td className="p-3 font-mono text-zinc-700">{r.start_date}</td>
                 <td className={`p-3 font-mono ${isOverdue ? "text-red-600 font-bold" : "text-zinc-700"}`}>{r.due_date}</td>
                 <td className="p-3">
